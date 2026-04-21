@@ -1,0 +1,29 @@
+# This file is a template, and might need editing before it works on your project.
+# This is the Gradle build system for JVM applications
+# https://gradle.org/
+# https://github.com/gradle/gradle
+image: gradle:7.3-jdk11-alpine
+build:
+  stage: build
+  tags:
+   - dev-ci
+  except:
+    changes:
+      - master
+  script:
+  #  - ${GRADLE_HOME}/bin/gradle clean
+  #  - ${GRADLE_HOME}/bin/gradle bootjar
+  #  - ${GRADLE_HOME}/bin/gradle test
+  #  - ${GRADLE_HOME}/bin/gradle sonar
+   - echo 1
+  cache:
+    key: "$CI_COMMIT_REF_NAME"
+    policy: push
+    paths:
+      - build
+      - ${GRADLE_HOME}/.gradle
+  artifacts:
+    paths:
+      - ./READ.MD
+      # - ./build/libs/*.jar
+    when: always
