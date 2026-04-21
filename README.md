@@ -36,15 +36,6 @@
 - **代码高亮**: highlight.js + @highlightjs/vue-plugin
 - **HTTP 客户端**: Axios
 
-## 支持的环境
-
-系统支持多环境切换，包括：
-
-- 中国区: `china dev`, `china dev-staging`, `china prod`
-- 新加坡区: `singapore-dev`, `singapore-staging`, `singapore-prod`
-- 美国区: `usa-prod`
-- 西班牙区: `Spain-prod`
-
 ## 项目结构
 
 ```
