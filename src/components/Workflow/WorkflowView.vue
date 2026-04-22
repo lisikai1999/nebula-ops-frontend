@@ -114,6 +114,42 @@
 
                 <el-divider />
 
+                <el-card shadow="never" style="border: none; padding: 0;">
+                  <template #header>
+                    <div class="card-header">
+                      <span>变量配置</span>
+                      <el-button size="small" text @click="addVariable">
+                        <el-icon><Plus /></el-icon>
+                        添加变量
+                      </el-button>
+                    </div>
+                  </template>
+                  <el-table :data="variableList" size="small" style="width: 100%">
+                    <el-table-column prop="key" label="变量名" width="120">
+                      <template #default="scope">
+                        <el-input v-model="scope.row.key" size="small" placeholder="key" />
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="value" label="值">
+                      <template #default="scope">
+                        <el-input v-model="scope.row.value" size="small" placeholder="value" />
+                      </template>
+                    </el-table-column>
+                    <el-table-column width="60" align="center">
+                      <template #default="scope">
+                        <el-button size="small" type="danger" link @click="removeVariable(scope.$index)">
+                          <el-icon><Delete /></el-icon>
+                        </el-button>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                  <p v-if="variableList.length === 0" style="text-align: center; color: #909399; font-size: 12px; padding: 16px;">
+                    暂无变量，点击"添加变量"按钮创建。变量可在步骤配置中通过 {{变量名}} 使用。
+                  </p>
+                </el-card>
+
+                <el-divider />
+
                 <h4>添加步骤</h4>
                 <div class="action-types">
                   <div
@@ -533,6 +569,7 @@ const createMode = ref('template')
 const selectedTemplate = ref(null)
 const newWorkflowName = ref('')
 const newWorkflowDescription = ref('')
+const variableList = ref([])
 
 const actionTypeInfo = computed(() => {
   const filtered = {}
@@ -715,10 +752,24 @@ function saveWorkflow() {
     name: editingWorkflow.value.name,
     description: editingWorkflow.value.description,
     steps: editingWorkflow.value.steps,
+    variables: editingWorkflow.value.variables,
     updatedAt: new Date().toISOString()
   })
   
   ElMessage.success('工作流已保存')
+}
+
+function addVariable() {
+  if (!variableList.value) {
+    variableList.value = []
+  }
+  variableList.value.push({ key: '', value: '' })
+}
+
+function removeVariable(index) {
+  if (variableList.value) {
+    variableList.value.splice(index, 1)
+  }
 }
 
 function getDefaultConfig(actionType) {
@@ -928,6 +979,25 @@ function viewExecution(execution) {
   selectedExecution.value = execution
   activeTab.value = 'execute'
 }
+
+watch(editingWorkflow, (newWorkflow) => {
+  if (newWorkflow) {
+    variableList.value = Object.entries(newWorkflow.variables || {}).map(([key, value]) => ({ key, value }))
+  } else {
+    variableList.value = []
+  }
+})
+
+watch(variableList, (newList) => {
+  if (editingWorkflow.value) {
+    editingWorkflow.value.variables = {}
+    newList.forEach(item => {
+      if (item.key) {
+        editingWorkflow.value.variables[item.key] = item.value
+      }
+    })
+  }
+}, { deep: true })
 
 watch(activeTab, (newVal) => {
   if (newVal !== 'edit') {
