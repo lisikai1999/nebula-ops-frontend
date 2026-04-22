@@ -1,6 +1,7 @@
 import './assets/main.css'
 
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import App from './App.vue'
 
 // 引入element-plus
@@ -21,10 +22,11 @@ import json from 'highlight.js/lib/languages/json'
 hljs.registerLanguage('json', json)
 
 
+const pinia = createPinia()
 
-// createApp(App).mount('#app')
 const app = createApp(App)
 app.use(ElementPlus)
+app.use(pinia)
 app.use(hljsVuePlugin)
 app.component('EasyDataTable', Vue3EasyDataTable);
 app.mount('#app')
