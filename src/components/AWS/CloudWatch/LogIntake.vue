@@ -4,8 +4,10 @@ export default {
     data() {
         return {
             charts: [],
-            process: true,
-            logDataList: []
+            logDataList: [],
+            loadingStates: [true, true, true, true, true, true, true],
+            chartRefs: ['chart', 'chart2', 'chart3', 'chart4', 'chart5', 'chart6', 'chart7'],
+            environments: []
         };
     },
     methods: {
@@ -132,48 +134,85 @@ export default {
                 ]
             };
         },
-        drawChart(logDataList) {
-            this.logDataList = logDataList;
+        drawSingleChart(index, logData) {
             this.$nextTick(() => {
-                const chartRefs = [
-                    this.$refs.chart,
-                    this.$refs.chart2,
-                    this.$refs.chart3,
-                    this.$refs.chart4,
-                    this.$refs.chart5,
-                    this.$refs.chart6,
-                    this.$refs.chart7
-                ];
-
-                this.charts = chartRefs.map((ref, index) => {
-                    if (ref && logDataList[index]) {
-                        const chart = echarts.init(ref);
-                        chart.setOption(this.chartOption(logDataList[index]));
-                        return chart;
+                const refName = this.chartRefs[index];
+                const ref = this.$refs[refName];
+                
+                if (ref && logData && logData.length > 0) {
+                    if (this.charts[index]) {
+                        this.charts[index].dispose();
                     }
-                    return null;
-                }).filter(chart => chart !== null);
+                    
+                    const chart = echarts.init(ref);
+                    chart.setOption(this.chartOption(logData));
+                    this.charts[index] = chart;
+                    
+                    if (!this.logDataList) {
+                        this.logDataList = [];
+                    }
+                    this.logDataList[index] = logData;
+                }
             });
         },
-        fetchLogData() {
-            axios.get('/api/aws/get_cloudwatch_IncomingBytes')
-                .then(response => {
-                    const logData = response.data;
-                    this.drawChart(logData);
-                })
-                .catch(error => {
-                    console.log(error);
-                    this.showMockData();
-                })
-                .finally(() => {
-                    this.process = false;
+        async fetchLogData() {
+            this.loadingStates = [true, true, true, true, true, true, true];
+            this.logDataList = [];
+            
+            try {
+                const response = await axios.get('/api/aws/get_cloudwatch_IncomingBytes');
+                const allLogData = response.data;
+                
+                this.environments = allLogData.map(data => data[0]?.env || '未知环境');
+                
+                allLogData.forEach((logData, index) => {
+                    if (logData && logData.length > 0) {
+                        this.loadingStates[index] = false;
+                        this.drawSingleChart(index, logData);
+                    }
                 });
+                
+                const loadedCount = allLogData.filter(data => data && data.length > 0).length;
+                for (let i = loadedCount; i < 7; i++) {
+                    this.loadingStates[i] = false;
+                }
+                
+            } catch (error) {
+                console.log(error);
+                this.showMockData();
+            }
+        },
+        async fetchLogDataIncrementally() {
+            this.loadingStates = [true, true, true, true, true, true, true];
+            this.logDataList = [];
+            
+            try {
+                const response = await axios.get('/api/aws/get_cloudwatch_IncomingBytes');
+                const allLogData = response.data;
+                
+                for (let i = 0; i < allLogData.length; i++) {
+                    const logData = allLogData[i];
+                    if (logData && logData.length > 0) {
+                        this.loadingStates[i] = false;
+                        this.drawSingleChart(i, logData);
+                    }
+                }
+                
+                const loadedCount = allLogData.filter(data => data && data.length > 0).length;
+                for (let i = loadedCount; i < 7; i++) {
+                    this.loadingStates[i] = false;
+                }
+                
+            } catch (error) {
+                console.log(error);
+                this.showMockData();
+            }
         },
         showMockData() {
             const mockData = [];
             const environments = ['生产环境', '测试环境', '开发环境', '预发布环境', 'UAT环境', 'Staging环境', 'Demo环境'];
             
-            environments.forEach(env => {
+            environments.forEach((env, index) => {
                 const data = [];
                 const now = new Date();
                 
@@ -187,9 +226,12 @@ export default {
                     });
                 }
                 mockData.push(data);
+                
+                setTimeout(() => {
+                    this.loadingStates[index] = false;
+                    this.drawSingleChart(index, data);
+                }, index * 300);
             });
-            
-            this.drawChart(mockData);
         },
         handleResize() {
             this.charts.forEach(chart => {
@@ -197,6 +239,18 @@ export default {
                     chart.resize();
                 }
             });
+        },
+        refreshChart(index) {
+            this.loadingStates[index] = true;
+            
+            setTimeout(() => {
+                if (this.logDataList[index]) {
+                    this.loadingStates[index] = false;
+                    this.drawSingleChart(index, this.logDataList[index]);
+                } else {
+                    this.loadingStates[index] = false;
+                }
+            }, 500);
         }
     },
     mounted() {
@@ -221,9 +275,9 @@ export default {
                 <div class="header-left">
                     <el-icon class="header-icon"><DataLine /></el-icon>
                     <h1 class="page-title">日志摄入量监控</h1>
+                    <el-tag type="primary" effect="plain">实时监控</el-tag>
                 </div>
                 <div class="header-right">
-                    <el-tag type="primary" effect="plain">实时监控</el-tag>
                     <el-button type="primary" size="small" @click="fetchLogData">
                         <el-icon><Refresh /></el-icon>
                         刷新数据
@@ -232,51 +286,50 @@ export default {
             </div>
         </el-card>
 
-        <div v-if="process" class="loading-container">
-            <el-loading text="加载中..." />
-        </div>
-
-        <div v-else class="charts-container">
+        <div class="charts-container">
             <el-row :gutter="24">
-                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
+                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8" v-for="index in 7" :key="index">
                     <el-card class="chart-card" shadow="hover">
-                        <div ref="chart" class="chart-wrapper"></div>
-                    </el-card>
-                </el-col>
-                
-                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
-                    <el-card class="chart-card" shadow="hover">
-                        <div ref="chart2" class="chart-wrapper"></div>
-                    </el-card>
-                </el-col>
-                
-                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
-                    <el-card class="chart-card" shadow="hover">
-                        <div ref="chart3" class="chart-wrapper"></div>
-                    </el-card>
-                </el-col>
-                
-                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
-                    <el-card class="chart-card" shadow="hover">
-                        <div ref="chart4" class="chart-wrapper"></div>
-                    </el-card>
-                </el-col>
-                
-                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
-                    <el-card class="chart-card" shadow="hover">
-                        <div ref="chart5" class="chart-wrapper"></div>
-                    </el-card>
-                </el-col>
-                
-                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
-                    <el-card class="chart-card" shadow="hover">
-                        <div ref="chart6" class="chart-wrapper"></div>
-                    </el-card>
-                </el-col>
-                
-                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
-                    <el-card class="chart-card" shadow="hover">
-                        <div ref="chart7" class="chart-wrapper"></div>
+                        <template #header>
+                            <div class="chart-header">
+                                <span class="chart-title">
+                                    {{ logDataList[index - 1]?.[0]?.env || `图表 ${index}` }}
+                                </span>
+                                <el-button 
+                                    type="text" 
+                                    size="small" 
+                                    :loading="loadingStates[index - 1]"
+                                    @click="refreshChart(index - 1)"
+                                >
+                                    <el-icon><Refresh /></el-icon>
+                                </el-button>
+                            </div>
+                        </template>
+                        
+                        <div class="chart-wrapper-container">
+                            <div 
+                                v-if="loadingStates[index - 1]" 
+                                class="chart-loading"
+                            >
+                                <div class="loading-content">
+                                    <el-icon class="loading-icon"><Loading /></el-icon>
+                                    <span class="loading-text">数据加载中...</span>
+                                </div>
+                            </div>
+                            
+                            <div 
+                                v-else-if="!logDataList[index - 1] || logDataList[index - 1].length === 0"
+                                class="chart-empty"
+                            >
+                                <el-empty description="暂无数据" :image-size="60" />
+                            </div>
+                            
+                            <div 
+                                v-else
+                                :ref="chartRefs[index - 1]" 
+                                class="chart-wrapper"
+                            ></div>
+                        </div>
                     </el-card>
                 </el-col>
             </el-row>
@@ -285,7 +338,7 @@ export default {
 </template>
 
 <script setup>
-import { DataLine, Refresh } from '@element-plus/icons-vue';
+import { DataLine, Refresh, Loading } from '@element-plus/icons-vue';
 </script>
 
 <style scoped>
@@ -330,13 +383,6 @@ import { DataLine, Refresh } from '@element-plus/icons-vue';
     gap: 12px;
 }
 
-.loading-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 400px;
-}
-
 .charts-container {
     width: 100%;
 }
@@ -352,9 +398,79 @@ import { DataLine, Refresh } from '@element-plus/icons-vue';
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-.chart-wrapper {
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chart-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #303133;
+}
+
+.chart-wrapper-container {
+    position: relative;
     width: 100%;
     height: 350px;
+}
+
+.chart-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 4px;
+    z-index: 10;
+}
+
+.loading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.loading-icon {
+    font-size: 32px;
+    color: #409EFF;
+    animation: rotate 1s linear infinite;
+}
+
+.loading-text {
+    font-size: 14px;
+    color: #606266;
+}
+
+.chart-empty {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.chart-wrapper {
+    width: 100%;
+    height: 100%;
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 @media (max-width: 768px) {
@@ -367,7 +483,7 @@ import { DataLine, Refresh } from '@element-plus/icons-vue';
         font-size: 18px;
     }
     
-    .chart-wrapper {
+    .chart-wrapper-container {
         height: 300px;
     }
 }
