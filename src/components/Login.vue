@@ -148,8 +148,7 @@ export default {
                 
                 <div class="login-footer">
                     <p class="copyright">
-                        <el-icon><Copyright /></el-icon>
-                        2024 运维平台. All rights reserved.
+                        © 2024 运维平台. All rights reserved.
                     </p>
                 </div>
             </el-card>
@@ -163,8 +162,7 @@ import {
     User, 
     Lock, 
     Right, 
-    Operation, 
-    Copyright 
+    Operation 
 } from '@element-plus/icons-vue';
 
 const loginFormRef = ref(null);
