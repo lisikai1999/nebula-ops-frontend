@@ -8,6 +8,7 @@ import Route from './components/AWS/Route/Route.vue'
 import KnowledgeBase from './components/AI/knowledge_base.vue'
 import LLMWeb from './components/AI/LLMWeb.vue'
 import Login from './components/Login.vue'
+import WorkflowView from './components/Workflow/WorkflowView.vue'
 
 const routes = {
   '/Login': Login,
@@ -18,6 +19,7 @@ const routes = {
   '/aws/Route': Route,
   '/ai/KnowledgeBase': KnowledgeBase,
   '/ai/LLMWeb': LLMWeb,
+  '/workflow': WorkflowView,
 }
 
 export default {
@@ -121,6 +123,11 @@ export default {
             <template #title>RAG强化问答系统</template>
           </el-menu-item>
         </el-sub-menu>
+
+        <el-menu-item index="/workflow">
+          <el-icon><Setting /></el-icon>
+          <template #title>工作流编排</template>
+        </el-menu-item>
         
         <el-menu-item index="/Login">
           <el-icon><Lock /></el-icon>
@@ -188,7 +195,8 @@ import {
   Lock,
   Expand,
   Fold,
-  UserFilled
+  UserFilled,
+  Setting
 } from '@element-plus/icons-vue'
 
 const getBreadcrumbName = (path) => {
@@ -199,7 +207,8 @@ const getBreadcrumbName = (path) => {
     '/aws/Route': '域名路由',
     '/Login': '权限认证',
     '/ai/KnowledgeBase': '知识库管理',
-    '/ai/LLMWeb': 'RAG强化问答系统'
+    '/ai/LLMWeb': 'RAG强化问答系统',
+    '/workflow': '工作流编排'
   }
   return nameMap[path] || '未知页面'
 }
