@@ -4,9 +4,9 @@ export default {
     data() {
         return {
             charts: [],
+            process: true,
             logDataList: [],
-            loadingStates: [true, true, true, true, true, true, true],
-            chartRefs: ['chart', 'chart2', 'chart3', 'chart4', 'chart5', 'chart6', 'chart7'],
+            chartLoadingStates: [true, true, true, true, true, true, true],
             environments: []
         };
     },
@@ -134,10 +134,44 @@ export default {
                 ]
             };
         },
+        drawChart(logDataList) {
+            this.logDataList = logDataList;
+            this.$nextTick(() => {
+                const chartRefs = [
+                    this.$refs.chart,
+                    this.$refs.chart2,
+                    this.$refs.chart3,
+                    this.$refs.chart4,
+                    this.$refs.chart5,
+                    this.$refs.chart6,
+                    this.$refs.chart7
+                ];
+
+                this.charts = chartRefs.map((ref, index) => {
+                    if (ref && logDataList[index] && logDataList[index].length > 0) {
+                        this.$set(this.chartLoadingStates, index, false);
+                        const chart = echarts.init(ref);
+                        chart.setOption(this.chartOption(logDataList[index]));
+                        return chart;
+                    }
+                    this.$set(this.chartLoadingStates, index, false);
+                    return null;
+                }).filter(chart => chart !== null);
+            });
+        },
         drawSingleChart(index, logData) {
             this.$nextTick(() => {
-                const refName = this.chartRefs[index];
-                const ref = this.$refs[refName];
+                const chartRefs = [
+                    this.$refs.chart,
+                    this.$refs.chart2,
+                    this.$refs.chart3,
+                    this.$refs.chart4,
+                    this.$refs.chart5,
+                    this.$refs.chart6,
+                    this.$refs.chart7
+                ];
+                
+                const ref = chartRefs[index];
                 
                 if (ref && logData && logData.length > 0) {
                     if (this.charts[index]) {
@@ -152,11 +186,15 @@ export default {
                         this.logDataList = [];
                     }
                     this.logDataList[index] = logData;
+                    this.$set(this.chartLoadingStates, index, false);
+                } else {
+                    this.$set(this.chartLoadingStates, index, false);
                 }
             });
         },
         async fetchLogData() {
-            this.loadingStates = [true, true, true, true, true, true, true];
+            this.process = true;
+            this.chartLoadingStates = [true, true, true, true, true, true, true];
             this.logDataList = [];
             
             try {
@@ -164,48 +202,13 @@ export default {
                 const allLogData = response.data;
                 
                 this.environments = allLogData.map(data => data[0]?.env || '未知环境');
-                
-                allLogData.forEach((logData, index) => {
-                    if (logData && logData.length > 0) {
-                        this.loadingStates[index] = false;
-                        this.drawSingleChart(index, logData);
-                    }
-                });
-                
-                const loadedCount = allLogData.filter(data => data && data.length > 0).length;
-                for (let i = loadedCount; i < 7; i++) {
-                    this.loadingStates[i] = false;
-                }
+                this.drawChart(allLogData);
                 
             } catch (error) {
                 console.log(error);
                 this.showMockData();
-            }
-        },
-        async fetchLogDataIncrementally() {
-            this.loadingStates = [true, true, true, true, true, true, true];
-            this.logDataList = [];
-            
-            try {
-                const response = await axios.get('/api/aws/get_cloudwatch_IncomingBytes');
-                const allLogData = response.data;
-                
-                for (let i = 0; i < allLogData.length; i++) {
-                    const logData = allLogData[i];
-                    if (logData && logData.length > 0) {
-                        this.loadingStates[i] = false;
-                        this.drawSingleChart(i, logData);
-                    }
-                }
-                
-                const loadedCount = allLogData.filter(data => data && data.length > 0).length;
-                for (let i = loadedCount; i < 7; i++) {
-                    this.loadingStates[i] = false;
-                }
-                
-            } catch (error) {
-                console.log(error);
-                this.showMockData();
+            } finally {
+                this.process = false;
             }
         },
         showMockData() {
@@ -226,12 +229,9 @@ export default {
                     });
                 }
                 mockData.push(data);
-                
-                setTimeout(() => {
-                    this.loadingStates[index] = false;
-                    this.drawSingleChart(index, data);
-                }, index * 300);
             });
+            
+            this.drawChart(mockData);
         },
         handleResize() {
             this.charts.forEach(chart => {
@@ -241,16 +241,24 @@ export default {
             });
         },
         refreshChart(index) {
-            this.loadingStates[index] = true;
+            this.$set(this.chartLoadingStates, index, true);
             
             setTimeout(() => {
                 if (this.logDataList[index]) {
-                    this.loadingStates[index] = false;
                     this.drawSingleChart(index, this.logDataList[index]);
                 } else {
-                    this.loadingStates[index] = false;
+                    this.$set(this.chartLoadingStates, index, false);
                 }
             }, 500);
+        },
+        getEnvName(index) {
+            if (this.logDataList[index] && this.logDataList[index][0]) {
+                return this.logDataList[index][0].env;
+            }
+            return `图表 ${index + 1}`;
+        },
+        hasData(index) {
+            return this.logDataList[index] && this.logDataList[index].length > 0;
         }
     },
     mounted() {
@@ -278,7 +286,7 @@ export default {
                     <el-tag type="primary" effect="plain">实时监控</el-tag>
                 </div>
                 <div class="header-right">
-                    <el-button type="primary" size="small" @click="fetchLogData">
+                    <el-button type="primary" size="small" @click="fetchLogData" :loading="process">
                         <el-icon><Refresh /></el-icon>
                         刷新数据
                     </el-button>
@@ -286,20 +294,27 @@ export default {
             </div>
         </el-card>
 
-        <div class="charts-container">
+        <div v-if="process" class="global-loading-container">
+            <div class="loading-content">
+                <el-icon class="loading-icon"><Loading /></el-icon>
+                <span class="loading-text">正在加载图表数据...</span>
+            </div>
+        </div>
+
+        <div v-else class="charts-container">
             <el-row :gutter="24">
-                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8" v-for="index in 7" :key="index">
+                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
                     <el-card class="chart-card" shadow="hover">
                         <template #header>
                             <div class="chart-header">
                                 <span class="chart-title">
-                                    {{ logDataList[index - 1]?.[0]?.env || `图表 ${index}` }}
+                                    {{ getEnvName(0) }}
                                 </span>
                                 <el-button 
                                     type="text" 
                                     size="small" 
-                                    :loading="loadingStates[index - 1]"
-                                    @click="refreshChart(index - 1)"
+                                    :loading="chartLoadingStates[0]"
+                                    @click="refreshChart(0)"
                                 >
                                     <el-icon><Refresh /></el-icon>
                                 </el-button>
@@ -308,25 +323,288 @@ export default {
                         
                         <div class="chart-wrapper-container">
                             <div 
-                                v-if="loadingStates[index - 1]" 
-                                class="chart-loading"
+                                v-if="chartLoadingStates[0]" 
+                                class="chart-loading-overlay"
                             >
                                 <div class="loading-content">
-                                    <el-icon class="loading-icon"><Loading /></el-icon>
-                                    <span class="loading-text">数据加载中...</span>
+                                    <el-icon class="loading-spin"><Loading /></el-icon>
+                                    <span class="loading-text">加载中...</span>
                                 </div>
                             </div>
                             
                             <div 
-                                v-else-if="!logDataList[index - 1] || logDataList[index - 1].length === 0"
+                                v-else-if="!hasData(0)"
                                 class="chart-empty"
                             >
                                 <el-empty description="暂无数据" :image-size="60" />
                             </div>
                             
                             <div 
-                                v-else
-                                :ref="chartRefs[index - 1]" 
+                                ref="chart" 
+                                class="chart-wrapper"
+                            ></div>
+                        </div>
+                    </el-card>
+                </el-col>
+                
+                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
+                    <el-card class="chart-card" shadow="hover">
+                        <template #header>
+                            <div class="chart-header">
+                                <span class="chart-title">
+                                    {{ getEnvName(1) }}
+                                </span>
+                                <el-button 
+                                    type="text" 
+                                    size="small" 
+                                    :loading="chartLoadingStates[1]"
+                                    @click="refreshChart(1)"
+                                >
+                                    <el-icon><Refresh /></el-icon>
+                                </el-button>
+                            </div>
+                        </template>
+                        
+                        <div class="chart-wrapper-container">
+                            <div 
+                                v-if="chartLoadingStates[1]" 
+                                class="chart-loading-overlay"
+                            >
+                                <div class="loading-content">
+                                    <el-icon class="loading-spin"><Loading /></el-icon>
+                                    <span class="loading-text">加载中...</span>
+                                </div>
+                            </div>
+                            
+                            <div 
+                                v-else-if="!hasData(1)"
+                                class="chart-empty"
+                            >
+                                <el-empty description="暂无数据" :image-size="60" />
+                            </div>
+                            
+                            <div 
+                                ref="chart2" 
+                                class="chart-wrapper"
+                            ></div>
+                        </div>
+                    </el-card>
+                </el-col>
+                
+                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
+                    <el-card class="chart-card" shadow="hover">
+                        <template #header>
+                            <div class="chart-header">
+                                <span class="chart-title">
+                                    {{ getEnvName(2) }}
+                                </span>
+                                <el-button 
+                                    type="text" 
+                                    size="small" 
+                                    :loading="chartLoadingStates[2]"
+                                    @click="refreshChart(2)"
+                                >
+                                    <el-icon><Refresh /></el-icon>
+                                </el-button>
+                            </div>
+                        </template>
+                        
+                        <div class="chart-wrapper-container">
+                            <div 
+                                v-if="chartLoadingStates[2]" 
+                                class="chart-loading-overlay"
+                            >
+                                <div class="loading-content">
+                                    <el-icon class="loading-spin"><Loading /></el-icon>
+                                    <span class="loading-text">加载中...</span>
+                                </div>
+                            </div>
+                            
+                            <div 
+                                v-else-if="!hasData(2)"
+                                class="chart-empty"
+                            >
+                                <el-empty description="暂无数据" :image-size="60" />
+                            </div>
+                            
+                            <div 
+                                ref="chart3" 
+                                class="chart-wrapper"
+                            ></div>
+                        </div>
+                    </el-card>
+                </el-col>
+                
+                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
+                    <el-card class="chart-card" shadow="hover">
+                        <template #header>
+                            <div class="chart-header">
+                                <span class="chart-title">
+                                    {{ getEnvName(3) }}
+                                </span>
+                                <el-button 
+                                    type="text" 
+                                    size="small" 
+                                    :loading="chartLoadingStates[3]"
+                                    @click="refreshChart(3)"
+                                >
+                                    <el-icon><Refresh /></el-icon>
+                                </el-button>
+                            </div>
+                        </template>
+                        
+                        <div class="chart-wrapper-container">
+                            <div 
+                                v-if="chartLoadingStates[3]" 
+                                class="chart-loading-overlay"
+                            >
+                                <div class="loading-content">
+                                    <el-icon class="loading-spin"><Loading /></el-icon>
+                                    <span class="loading-text">加载中...</span>
+                                </div>
+                            </div>
+                            
+                            <div 
+                                v-else-if="!hasData(3)"
+                                class="chart-empty"
+                            >
+                                <el-empty description="暂无数据" :image-size="60" />
+                            </div>
+                            
+                            <div 
+                                ref="chart4" 
+                                class="chart-wrapper"
+                            ></div>
+                        </div>
+                    </el-card>
+                </el-col>
+                
+                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
+                    <el-card class="chart-card" shadow="hover">
+                        <template #header>
+                            <div class="chart-header">
+                                <span class="chart-title">
+                                    {{ getEnvName(4) }}
+                                </span>
+                                <el-button 
+                                    type="text" 
+                                    size="small" 
+                                    :loading="chartLoadingStates[4]"
+                                    @click="refreshChart(4)"
+                                >
+                                    <el-icon><Refresh /></el-icon>
+                                </el-button>
+                            </div>
+                        </template>
+                        
+                        <div class="chart-wrapper-container">
+                            <div 
+                                v-if="chartLoadingStates[4]" 
+                                class="chart-loading-overlay"
+                            >
+                                <div class="loading-content">
+                                    <el-icon class="loading-spin"><Loading /></el-icon>
+                                    <span class="loading-text">加载中...</span>
+                                </div>
+                            </div>
+                            
+                            <div 
+                                v-else-if="!hasData(4)"
+                                class="chart-empty"
+                            >
+                                <el-empty description="暂无数据" :image-size="60" />
+                            </div>
+                            
+                            <div 
+                                ref="chart5" 
+                                class="chart-wrapper"
+                            ></div>
+                        </div>
+                    </el-card>
+                </el-col>
+                
+                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
+                    <el-card class="chart-card" shadow="hover">
+                        <template #header>
+                            <div class="chart-header">
+                                <span class="chart-title">
+                                    {{ getEnvName(5) }}
+                                </span>
+                                <el-button 
+                                    type="text" 
+                                    size="small" 
+                                    :loading="chartLoadingStates[5]"
+                                    @click="refreshChart(5)"
+                                >
+                                    <el-icon><Refresh /></el-icon>
+                                </el-button>
+                            </div>
+                        </template>
+                        
+                        <div class="chart-wrapper-container">
+                            <div 
+                                v-if="chartLoadingStates[5]" 
+                                class="chart-loading-overlay"
+                            >
+                                <div class="loading-content">
+                                    <el-icon class="loading-spin"><Loading /></el-icon>
+                                    <span class="loading-text">加载中...</span>
+                                </div>
+                            </div>
+                            
+                            <div 
+                                v-else-if="!hasData(5)"
+                                class="chart-empty"
+                            >
+                                <el-empty description="暂无数据" :image-size="60" />
+                            </div>
+                            
+                            <div 
+                                ref="chart6" 
+                                class="chart-wrapper"
+                            ></div>
+                        </div>
+                    </el-card>
+                </el-col>
+                
+                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
+                    <el-card class="chart-card" shadow="hover">
+                        <template #header>
+                            <div class="chart-header">
+                                <span class="chart-title">
+                                    {{ getEnvName(6) }}
+                                </span>
+                                <el-button 
+                                    type="text" 
+                                    size="small" 
+                                    :loading="chartLoadingStates[6]"
+                                    @click="refreshChart(6)"
+                                >
+                                    <el-icon><Refresh /></el-icon>
+                                </el-button>
+                            </div>
+                        </template>
+                        
+                        <div class="chart-wrapper-container">
+                            <div 
+                                v-if="chartLoadingStates[6]" 
+                                class="chart-loading-overlay"
+                            >
+                                <div class="loading-content">
+                                    <el-icon class="loading-spin"><Loading /></el-icon>
+                                    <span class="loading-text">加载中...</span>
+                                </div>
+                            </div>
+                            
+                            <div 
+                                v-else-if="!hasData(6)"
+                                class="chart-empty"
+                            >
+                                <el-empty description="暂无数据" :image-size="60" />
+                            </div>
+                            
+                            <div 
+                                ref="chart7" 
                                 class="chart-wrapper"
                             ></div>
                         </div>
@@ -383,6 +661,31 @@ import { DataLine, Refresh, Loading } from '@element-plus/icons-vue';
     gap: 12px;
 }
 
+.global-loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+}
+
+.global-loading-container .loading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.global-loading-container .loading-icon {
+    font-size: 48px;
+    color: #409EFF;
+    animation: rotate 1s linear infinite;
+}
+
+.global-loading-container .loading-text {
+    font-size: 16px;
+    color: #606266;
+}
+
 .charts-container {
     width: 100%;
 }
@@ -416,7 +719,7 @@ import { DataLine, Refresh, Loading } from '@element-plus/icons-vue';
     height: 350px;
 }
 
-.chart-loading {
+.chart-loading-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -430,20 +733,20 @@ import { DataLine, Refresh, Loading } from '@element-plus/icons-vue';
     z-index: 10;
 }
 
-.loading-content {
+.chart-loading-overlay .loading-content {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
 }
 
-.loading-icon {
+.loading-spin {
     font-size: 32px;
     color: #409EFF;
     animation: rotate 1s linear infinite;
 }
 
-.loading-text {
+.chart-loading-overlay .loading-text {
     font-size: 14px;
     color: #606266;
 }
@@ -457,6 +760,7 @@ import { DataLine, Refresh, Loading } from '@element-plus/icons-vue';
     display: flex;
     justify-content: center;
     align-items: center;
+    z-index: 5;
 }
 
 .chart-wrapper {
