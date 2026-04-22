@@ -41,6 +41,11 @@ export default {
       this.activeMenu = newPath.slice(1)
     }
   },
+  methods: {
+    handleMenuSelect(index) {
+      window.location.hash = index
+    }
+  },
   mounted() {
     this.activeMenu = this.currentPath.slice(1) || '/aws/logIntake'
     window.addEventListener('hashchange', () => {
@@ -71,7 +76,7 @@ export default {
         background-color="#304156"
         text-color="#bfcbd9"
         active-text-color="#409EFF"
-        router
+        @select="handleMenuSelect"
         class="sidebar-menu"
       >
         <el-menu-item index="/aws/logIntake">
@@ -135,7 +140,9 @@ export default {
       <el-header v-if="!isLoginPage" class="header">
         <div class="header-left">
           <el-breadcrumb separator="/">
-            <el-breadcrumb-item :to="{ path: '/aws/logIntake' }">首页</el-breadcrumb-item>
+            <el-breadcrumb-item @click="handleMenuSelect('/aws/logIntake')" style="cursor: pointer;">
+              <span style="color: #409EFF; text-decoration: none;">首页</span>
+            </el-breadcrumb-item>
             <el-breadcrumb-item v-if="activeMenu !== '/aws/logIntake'">
               {{ getBreadcrumbName(activeMenu) }}
             </el-breadcrumb-item>
