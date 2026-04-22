@@ -85,7 +85,10 @@ export function useWorkflowStore() {
     try {
       const saved = localStorage.getItem('nebula-ops-execution-history')
       if (saved) {
-        executionHistory.value = JSON.parse(saved)
+        const parsed = JSON.parse(saved)
+        executionHistory.value = Array.isArray(parsed) ? parsed : []
+      } else {
+        executionHistory.value = []
       }
     } catch (error) {
       console.error('[WorkflowStore] 加载执行历史失败:', error)
@@ -126,15 +129,19 @@ export function useWorkflowStore() {
     try {
       const saved = localStorage.getItem('nebula-ops-workflows')
       if (saved) {
-        workflows.value = JSON.parse(saved)
+        const parsed = JSON.parse(saved)
+        workflows.value = Array.isArray(parsed) ? parsed : []
         workflows.value.forEach(workflow => {
           workflowEngine.registerWorkflow(workflow)
         })
+      } else {
+        workflows.value = []
       }
       loadExecutionHistory()
       loadCurrentExecution()
     } catch (error) {
       console.error('[WorkflowStore] 加载工作流失败:', error)
+      workflows.value = []
     }
   }
 

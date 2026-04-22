@@ -1295,7 +1295,8 @@ function confirmDeleteHistory(execution) {
 
 watch(editingWorkflow, (newWorkflow) => {
   if (newWorkflow) {
-    variableList.value = Object.entries(newWorkflow.variables || {}).map(([key, value]) => ({ key, value }))
+    const entries = Object.entries(newWorkflow.variables || {})
+    variableList.value = Array.isArray(entries) ? entries.map(([key, value]) => ({ key, value })) : []
   } else {
     variableList.value = []
   }
