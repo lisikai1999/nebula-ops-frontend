@@ -467,24 +467,87 @@
             <el-col :span="12">
               <el-card>
                 <template #header>
-                  <span>步骤状态</span>
+                  <div class="card-header">
+                    <span>步骤状态</span>
+                    <span style="font-size: 12px; color: #909399;">点击步骤查看输出</span>
+                  </div>
                 </template>
                 <div class="step-status-list">
                   <div
                     v-for="step in activeExecution?.workflowSnapshot?.steps || []"
                     :key="step.id"
                     class="step-status-item"
+                    :class="{ 'step-status-expanded': selectedStepForDetail === step.id }"
+                    @click="toggleStepDetail(step.id)"
                   >
-                    <span class="step-status-icon" :class="getStepStatusClass(getStepStatus(step.id))">
-                      <el-icon>
-                        <component :is="getStepStatusIcon(getStepStatus(step.id))" />
-                      </el-icon>
-                    </span>
-                    <div class="step-status-info">
-                      <div class="step-status-name">{{ step.name }}</div>
-                      <div class="step-status-time">
-                        {{ getStepStatusText(getStepStatus(step.id)) }}
+                    <div class="step-status-main">
+                      <span class="step-status-icon" :class="getStepStatusClass(getStepStatus(step.id))">
+                        <el-icon>
+                          <component :is="getStepStatusIcon(getStepStatus(step.id))" />
+                        </el-icon>
+                      </span>
+                      <div class="step-status-info">
+                        <div class="step-status-name">{{ step.name }}</div>
+                        <div class="step-status-time">
+                          {{ getStepStatusText(getStepStatus(step.id)) }}
+                          <span v-if="getStepDuration(step.id)" class="step-duration">
+                            · {{ getStepDuration(step.id) }}
+                          </span>
+                        </div>
                       </div>
+                      <div class="step-status-expand">
+                        <el-icon v-if="hasStepResult(step.id)">
+                          <component :is="selectedStepForDetail === step.id ? 'CaretTop' : 'CaretBottom'" />
+                        </el-icon>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="selectedStepForDetail === step.id && hasStepResult(step.id)"
+                      class="step-detail-container"
+                    >
+                      <el-card class="step-detail-card" shadow="never">
+                        <template #header>
+                          <div class="step-detail-header">
+                            <span class="step-detail-title">步骤输出</span>
+                            <el-tag :type="getStatusTagType(getStepStatus(step.id))" size="small">
+                              {{ getStepStatusText(getStepStatus(step.id)) }}
+                            </el-tag>
+                          </div>
+                        </template>
+
+                        <div class="step-detail-content">
+                          <template v-if="getStepResult(step.id)">
+                            <div v-if="getStepResult(step.id).content" class="step-output-section">
+                              <div class="step-output-label">输出内容：</div>
+                              <pre class="step-output-content">{{ getStepResult(step.id).content }}</pre>
+                            </div>
+
+                            <div
+                              v-if="getStepResult(step.id).data && Object.keys(getStepResult(step.id).data).length > 0"
+                              class="step-output-section"
+                            >
+                              <div class="step-output-label">详细数据：</div>
+                              <pre class="step-output-content">{{ formatStepData(getStepResult(step.id).data) }}</pre>
+                            </div>
+
+                            <div
+                              v-if="getStepResult(step.id).error || getStepStatusObject(step.id)?.error"
+                              class="step-output-section step-output-error"
+                            >
+                              <div class="step-output-label">错误信息：</div>
+                              <pre class="step-output-content">{{ getStepResult(step.id).error || getStepStatusObject(step.id)?.error }}</pre>
+                            </div>
+
+                            <div
+                              v-if="!getStepResult(step.id).content && !getStepResult(step.id).data && !getStepResult(step.id).error && !getStepStatusObject(step.id)?.error"
+                              class="step-output-empty"
+                            >
+                              该步骤暂无输出内容
+                            </div>
+                          </template>
+                        </div>
+                      </el-card>
                     </div>
                   </div>
                 </div>
@@ -553,7 +616,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Plus, ArrowUp, ArrowDown, Delete,
-  Timer, Loading, CircleCheck, CircleClose, Minus
+  Timer, Loading, CircleCheck, CircleClose, Minus,
+  CaretTop, CaretBottom
 } from '@element-plus/icons-vue'
 import { useWorkflowStore } from '@/stores/workflow-store'
 import { ActionType, ActionTypeInfo, WorkflowStatus, StepStatus } from '@/services/workflow-engine'
@@ -564,6 +628,7 @@ const activeTab = ref('list')
 const editingWorkflow = ref(null)
 const selectedStepId = ref(null)
 const selectedExecution = ref(null)
+const selectedStepForDetail = ref(null)
 const showCreateDialog = ref(false)
 const createMode = ref('template')
 const selectedTemplate = ref(null)
@@ -980,6 +1045,54 @@ function viewExecution(execution) {
   activeTab.value = 'execute'
 }
 
+function toggleStepDetail(stepId) {
+  if (selectedStepForDetail.value === stepId) {
+    selectedStepForDetail.value = null
+  } else {
+    selectedStepForDetail.value = stepId
+  }
+}
+
+function hasStepResult(stepId) {
+  if (!activeExecution.value) return false
+  return activeExecution.value.stepResults?.[stepId] !== undefined ||
+         activeExecution.value.stepStatuses?.[stepId]?.error
+}
+
+function getStepResult(stepId) {
+  if (!activeExecution.value) return null
+  return activeExecution.value.stepResults?.[stepId] || null
+}
+
+function getStepStatusObject(stepId) {
+  if (!activeExecution.value) return null
+  return activeExecution.value.stepStatuses?.[stepId] || null
+}
+
+function getStepDuration(stepId) {
+  const stepStatus = getStepStatusObject(stepId)
+  if (!stepStatus || !stepStatus.startTime) return null
+  
+  const endTime = stepStatus.endTime || Date.now()
+  const duration = endTime - stepStatus.startTime
+  
+  if (duration < 1000) {
+    return `${duration}ms`
+  } else if (duration < 60000) {
+    return `${(duration / 1000).toFixed(1)}s`
+  } else {
+    return `${(duration / 60000).toFixed(1)}m`
+  }
+}
+
+function formatStepData(data) {
+  try {
+    return JSON.stringify(data, null, 2)
+  } catch {
+    return String(data)
+  }
+}
+
 watch(editingWorkflow, (newWorkflow) => {
   if (newWorkflow) {
     variableList.value = Object.entries(newWorkflow.variables || {}).map(([key, value]) => ({ key, value }))
@@ -1005,6 +1118,7 @@ watch(activeTab, (newVal) => {
   }
   if (newVal !== 'execute') {
     selectedExecution.value = null
+    selectedStepForDetail.value = null
   }
 })
 </script>
@@ -1348,6 +1462,113 @@ watch(activeTab, (newVal) => {
   text-align: center;
   padding: 40px;
   color: #909399;
+}
+
+.step-status-item {
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 8px;
+}
+
+.step-status-item:hover {
+  background-color: #f5f7fa;
+}
+
+.step-status-item.step-status-expanded {
+  background-color: #f0f9ff;
+  border: 1px solid #9ec8ff;
+}
+
+.step-status-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 8px;
+}
+
+.step-status-expand {
+  margin-left: auto;
+  color: #909399;
+  transition: transform 0.3s;
+}
+
+.step-duration {
+  color: #606266;
+}
+
+.step-detail-container {
+  margin-top: 8px;
+  border-top: 1px solid #e4e7ed;
+  padding-top: 12px;
+}
+
+.step-detail-card {
+  background-color: #fff;
+  border: 1px solid #ebeef5;
+  margin: 0 8px 8px 8px;
+}
+
+.step-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.step-detail-title {
+  font-weight: 600;
+  color: #303133;
+}
+
+.step-detail-content {
+  padding: 8px 0;
+}
+
+.step-output-section {
+  margin-bottom: 16px;
+}
+
+.step-output-section:last-child {
+  margin-bottom: 0;
+}
+
+.step-output-section.step-output-error {
+  padding: 12px;
+  background-color: #fef0f0;
+  border-radius: 6px;
+  border: 1px solid #fde2e2;
+}
+
+.step-output-section.step-output-error .step-output-label {
+  color: #f56c6c;
+}
+
+.step-output-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.step-output-content {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px;
+  border-radius: 6px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+.step-output-empty {
+  text-align: center;
+  padding: 24px;
+  color: #909399;
+  font-size: 14px;
 }
 
 @keyframes pulse {
