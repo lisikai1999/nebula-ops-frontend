@@ -149,12 +149,12 @@ export default {
 
                 this.charts = chartRefs.map((ref, index) => {
                     if (ref && logDataList[index] && logDataList[index].length > 0) {
-                        this.$set(this.chartLoadingStates, index, false);
+                        this.chartLoadingStates[index] = false;
                         const chart = echarts.init(ref);
                         chart.setOption(this.chartOption(logDataList[index]));
                         return chart;
                     }
-                    this.$set(this.chartLoadingStates, index, false);
+                    this.chartLoadingStates[index] = false;
                     return null;
                 }).filter(chart => chart !== null);
             });
@@ -186,9 +186,9 @@ export default {
                         this.logDataList = [];
                     }
                     this.logDataList[index] = logData;
-                    this.$set(this.chartLoadingStates, index, false);
+                    this.chartLoadingStates[index] = false;
                 } else {
-                    this.$set(this.chartLoadingStates, index, false);
+                    this.chartLoadingStates[index] = false;
                 }
             });
         },
@@ -241,13 +241,13 @@ export default {
             });
         },
         refreshChart(index) {
-            this.$set(this.chartLoadingStates, index, true);
+            this.chartLoadingStates[index] = true;
             
             setTimeout(() => {
                 if (this.logDataList[index]) {
                     this.drawSingleChart(index, this.logDataList[index]);
                 } else {
-                    this.$set(this.chartLoadingStates, index, false);
+                    this.chartLoadingStates[index] = false;
                 }
             }, 500);
         },
