@@ -50,43 +50,49 @@
       </div>
     </div>
 
-    <!-- 图表容器 -->
+    <!-- 图表容器 - 始终渲染 -->
     <div class="chart-wrapper">
-      <!-- 骨架屏加载状态 -->
-      <el-skeleton v-if="loadingChart && !hasData" :rows="10" animated>
-        <template #template>
-          <el-skeleton-item variant="h1" style="width: 50%; margin-bottom: 20px;" />
-          <div class="skeleton-graph">
-            <el-skeleton-item variant="circle" style="width: 40px; height: 40px; margin: 20px;" />
-            <el-skeleton-item variant="rect" style="width: 100px; height: 2px; margin: 0 10px;" />
-            <el-skeleton-item variant="circle" style="width: 40px; height: 40px; margin: 20px;" />
-            <el-skeleton-item variant="rect" style="width: 100px; height: 2px; margin: 0 10px;" />
-            <el-skeleton-item variant="circle" style="width: 40px; height: 40px; margin: 20px;" />
-          </div>
-          <el-skeleton-item variant="text" style="width: 80%; margin-top: 20px;" />
-          <el-skeleton-item variant="text" style="width: 60%;" />
-          <el-skeleton-item variant="text" style="width: 70%;" />
-        </template>
-      </el-skeleton>
-      
-      <!-- 空状态 -->
-      <el-empty v-else-if="!hasData && !loadingChart" description="暂无数据，请选择环境并点击采集数据">
-        <el-button type="primary" :icon="Refresh" @click="updateChart" :disabled="!env">
-          开始采集
-        </el-button>
-      </el-empty>
-      
-      <!-- 搜索无结果 -->
-      <el-empty v-else-if="filteredNodes.length === 0 && hasData" description="未找到匹配的节点">
-        <el-button type="primary" @click="clearFilter">
-          清除筛选
-        </el-button>
-      </el-empty>
-      
-      <!-- 图表区域 -->
-      <div v-else ref="chart" class="chart-container" :class="{ 'chart-loading': loadingChart }">
-        <!-- 加载遮罩 -->
-        <div v-if="loadingChart" class="chart-loading-overlay">
+      <!-- 图表容器 - 始终存在，用于 ECharts 初始化 -->
+      <div ref="chart" class="chart-container">
+        <!-- 骨架屏加载状态 - 叠加在图表之上 -->
+        <div v-if="loadingChart && !hasData" class="skeleton-overlay">
+          <el-skeleton :rows="10" animated>
+            <template #template>
+              <el-skeleton-item variant="h1" style="width: 50%; margin-bottom: 20px;" />
+              <div class="skeleton-graph">
+                <el-skeleton-item variant="circle" style="width: 40px; height: 40px; margin: 20px;" />
+                <el-skeleton-item variant="rect" style="width: 100px; height: 2px; margin: 0 10px;" />
+                <el-skeleton-item variant="circle" style="width: 40px; height: 40px; margin: 20px;" />
+                <el-skeleton-item variant="rect" style="width: 100px; height: 2px; margin: 0 10px;" />
+                <el-skeleton-item variant="circle" style="width: 40px; height: 40px; margin: 20px;" />
+              </div>
+              <el-skeleton-item variant="text" style="width: 80%; margin-top: 20px;" />
+              <el-skeleton-item variant="text" style="width: 60%;" />
+              <el-skeleton-item variant="text" style="width: 70%;" />
+            </template>
+          </el-skeleton>
+        </div>
+        
+        <!-- 空状态 - 叠加在图表之上 -->
+        <div v-else-if="!hasData && !loadingChart" class="empty-overlay">
+          <el-empty description="暂无数据，请选择环境并点击采集数据">
+            <el-button type="primary" :icon="Refresh" @click="updateChart" :disabled="!env">
+              开始采集
+            </el-button>
+          </el-empty>
+        </div>
+        
+        <!-- 搜索无结果 - 叠加在图表之上 -->
+        <div v-else-if="filteredNodes.length === 0 && hasData" class="empty-overlay">
+          <el-empty description="未找到匹配的节点">
+            <el-button type="primary" @click="clearFilter">
+              清除筛选
+            </el-button>
+          </el-empty>
+        </div>
+        
+        <!-- 加载遮罩 - 已有数据时刷新显示 -->
+        <div v-if="loadingChart && hasData" class="chart-loading-overlay">
           <el-icon class="loading-icon"><Loading /></el-icon>
           <span class="loading-text">正在加载路由数据...</span>
         </div>
@@ -227,7 +233,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { Refresh, Search, Loading, Right, DataLine, Document, Share, Folder } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
@@ -301,18 +307,28 @@ const getCategoryTagType = (category) => {
   return types[category] || '';
 };
 
-// 初始化图表
+// 初始化图表 - 确保在 DOM 可用后初始化
 const initChart = () => {
   try {
+    // 确保 chart 容器存在
     if (!chart.value) {
-      console.warn('Chart container not found');
+      console.warn('Chart container not found, retrying...');
+      // 如果容器不存在，尝试在下一个 tick 初始化
+      nextTick(() => {
+        if (chart.value && !myChart.value) {
+          initChart();
+        }
+      });
       return;
     }
     
+    // 如果已经初始化，先销毁
     if (myChart.value) {
       myChart.value.dispose();
+      myChart.value = null;
     }
     
+    // 初始化 ECharts
     myChart.value = echarts.init(chart.value);
 
     const option = {
@@ -443,6 +459,8 @@ const initChart = () => {
     
     // 窗口大小改变时重绘
     window.addEventListener('resize', handleResize);
+    
+    console.log('Chart initialized successfully');
   } catch (error) {
     console.error('Failed to initialize chart:', error);
   }
@@ -455,6 +473,20 @@ const handleResize = () => {
   }
 };
 
+// 确保图表已初始化
+const ensureChartInitialized = () => {
+  if (!myChart.value) {
+    console.log('Chart not initialized, initializing now...');
+    initChart();
+    // 等待初始化完成
+    if (!myChart.value) {
+      console.warn('Chart initialization failed');
+      return false;
+    }
+  }
+  return true;
+};
+
 // 更新图表数据
 const updateChart = async () => {
   if (!env.value) {
@@ -465,9 +497,12 @@ const updateChart = async () => {
   try {
     loadingChart.value = true;
     
-    if (!myChart.value) {
-      initChart();
+    // 确保图表已初始化
+    await nextTick(); // 等待 DOM 更新
+    if (!ensureChartInitialized()) {
+      // 再次尝试
       await nextTick();
+      ensureChartInitialized();
     }
     
     const res = await axios.get('/api/aws/route_path?env=' + env.value + "&port=" + port.value + "&ZoneId=" + (ZoneId.value || ''));
@@ -489,18 +524,24 @@ const updateChart = async () => {
     
     // 静态坐标计算
     const positionedNodes = calcLayout(dynamicData.nodes);
-
-    myChart.value.setOption({
-      series: [{
-        data: positionedNodes,
-        links: dynamicData.links
-      }]
-    });
     
-    // 应用筛选
-    filterNodes();
-    
-    ElMessage.success(`成功加载 ${dynamicData.nodes.length} 个节点，${dynamicData.links.length} 条连接`);
+    // 确保图表已初始化后再设置数据
+    if (myChart.value) {
+      myChart.value.setOption({
+        series: [{
+          data: positionedNodes,
+          links: dynamicData.links
+        }]
+      });
+      
+      // 应用筛选
+      filterNodes();
+      
+      ElMessage.success(`成功加载 ${dynamicData.nodes.length} 个节点，${dynamicData.links.length} 条连接`);
+    } else {
+      console.error('Chart still not initialized after data fetch');
+      ElMessage.error('图表初始化失败，请刷新页面重试');
+    }
   } catch (err) {
     console.error('Failed to update chart:', err);
     ElMessage.error('获取数据失败: ' + (err.message || '未知错误'));
@@ -623,12 +664,19 @@ const handleCloseDrawer = (done) => {
 };
 
 onMounted(() => {
-  initChart();
+  // 在组件挂载后初始化图表
+  console.log('Component mounted, initializing chart...');
+  nextTick(() => {
+    initChart();
+  });
 });
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
-  myChart.value?.dispose();
+  if (myChart.value) {
+    myChart.value.dispose();
+    myChart.value = null;
+  }
 });
 </script>
 
@@ -681,20 +729,46 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
   min-height: 600px;
   border: 1px solid #ebeef5;
-  padding: 20px;
   margin-bottom: 20px;
+  position: relative;
 }
 
 .chart-container {
   width: 100%;
   min-height: 550px;
   position: relative;
+  padding: 20px;
 }
 
-.chart-loading {
-  opacity: 0.6;
+/* 骨架屏遮罩 - 覆盖整个图表区域 */
+.skeleton-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  z-index: 20;
+  padding: 20px;
+  border-radius: 8px;
 }
 
+/* 空状态遮罩 - 覆盖整个图表区域 */
+.empty-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 8px;
+}
+
+/* 加载遮罩 */
 .chart-loading-overlay {
   position: absolute;
   top: 0;
@@ -706,7 +780,7 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   background: rgba(255, 255, 255, 0.9);
-  z-index: 10;
+  z-index: 30;
   border-radius: 8px;
 }
 
