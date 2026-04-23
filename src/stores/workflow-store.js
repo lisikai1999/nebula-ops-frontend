@@ -391,93 +391,76 @@ export const useWorkflowStore = defineStore('workflow', () => {
       currentExecution.value = execution
       saveCurrentExecution()
 
-      try {
-        const apiResult = await workflowApiService.startExecution(workflowId, {
-          ...runtimeVariables,
-          workflowSnapshot: workflow
-        })
-        
-        if (apiResult && apiResult.executionId) {
-          execution.id = apiResult.executionId
-          execution.status = WorkflowStatus.RUNNING
-          execution.startTime = Date.now()
-          
-          executionLogs.value.push({
-            type: 'workflow_started',
-            workflowId,
-            workflowName: workflow.name,
-            message: `工作流已提交到后端执行: ${workflow.name}`,
-            timestamp: new Date().toISOString()
-          })
+      executionLogs.value.push({
+        type: 'info',
+        workflowId,
+        workflowName: workflow.name,
+        message: `正在提交工作流到后端执行: ${workflow.name}`,
+        timestamp: new Date().toISOString()
+      })
 
-          workflowApiService.startPolling(
-            apiResult.executionId,
-            (statusUpdate) => {
-              updateExecutionFromApiResponse(statusUpdate)
-            }
-          )
-
-          const finalStatus = await waitForExecutionComplete(apiResult.executionId)
-          
-          isLoading.value = false
-          return finalStatus
-        }
-      } catch (apiError) {
-        console.log('后端 API 执行失败，回退到本地执行:', apiError)
-        executionLogs.value.push({
-          type: 'info',
-          message: '后端 API 不可用，使用本地执行模式',
-          timestamp: new Date().toISOString()
-        })
+      const apiResult = await workflowApiService.startExecution(workflowId, {
+        ...runtimeVariables,
+        workflowSnapshot: workflow
+      })
+      
+      if (!apiResult || !apiResult.executionId) {
+        throw new Error('后端返回的执行 ID 无效')
       }
 
-      return await executeLocally(workflowId, runtimeVariables, execution)
+      execution.id = apiResult.executionId
+      execution.status = WorkflowStatus.RUNNING
+      execution.startTime = Date.now()
+      
+      executionLogs.value.push({
+        type: 'workflow_started',
+        workflowId,
+        workflowName: workflow.name,
+        message: `工作流已提交到后端执行，执行 ID: ${apiResult.executionId}`,
+        timestamp: new Date().toISOString()
+      })
+
+      workflowApiService.startPolling(
+        apiResult.executionId,
+        (statusUpdate) => {
+          updateExecutionFromApiResponse(statusUpdate)
+        }
+      )
+
+      const finalStatus = await waitForExecutionComplete(apiResult.executionId)
+      
+      isLoading.value = false
+      return finalStatus
       
     } catch (error) {
       isLoading.value = false
       refreshExecutionState()
-      throw error
-    }
-  }
-
-  async function executeLocally(workflowId, runtimeVariables = {}, execution = null) {
-    const workflow = getWorkflow(workflowId)
-    if (!workflow) {
-      throw new Error('工作流不存在')
-    }
-
-    if (!execution) {
-      execution = workflowEngine.createExecution(workflowId, runtimeVariables)
-      currentExecution.value = execution
-      saveCurrentExecution()
-    }
-
-    workflowEngine.registerWorkflow(workflow)
-    
-    workflowExecutor.subscribe(execution.id, (event) => {
+      
+      let errorMessage = '工作流执行失败'
+      if (error.response) {
+        if (error.response.data?.message) {
+          errorMessage = error.response.data.message
+        } else if (error.response.status === 401) {
+          errorMessage = '请先登录'
+        } else if (error.response.status === 403) {
+          errorMessage = '权限不足'
+        } else if (error.response.status === 404) {
+          errorMessage = '工作流不存在'
+        } else {
+          errorMessage = `执行失败 (${error.response.status})`
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
       executionLogs.value.push({
-        ...event,
-        timestamp: event.timestamp || new Date().toISOString()
+        type: 'error',
+        message: errorMessage,
+        timestamp: new Date().toISOString()
       })
       
-      if (['step_started', 'step_completed', 'step_failed', 'step_retry'].includes(event.type)) {
-        executionProgress.value = workflowEngine.getExecutionProgress(execution.id)
-        refreshExecutionState()
-      }
-      
-      if (['workflow_completed', 'workflow_failed'].includes(event.type)) {
-        refreshExecutionState()
-      }
-    })
-    
-    const result = await workflowExecutor.startExecution(execution, workflowEngine)
-    
-    isLoading.value = false
-    
-    executionProgress.value = workflowEngine.getExecutionProgress(execution.id)
-    refreshExecutionState()
-    
-    return result
+      throw new Error(errorMessage)
+    }
   }
 
   function updateExecutionFromApiResponse(apiResponse) {
