@@ -9,6 +9,7 @@ import KnowledgeBase from './components/AI/knowledge_base.vue'
 import LLMWeb from './components/AI/LLMWeb.vue'
 import WorkflowView from './components/Workflow/WorkflowView.vue'
 import Login from './components/Login.vue'
+import { useAuthStore } from './stores/auth-store'
 
 const routes = {
   '/Login': Login,
@@ -36,19 +37,52 @@ export default {
     },
     isLoginPage() {
       return this.currentPath === '#/Login'
+    },
+    authStore() {
+      return useAuthStore()
+    },
+    isAuthenticated() {
+      return this.authStore.isAuthenticated
+    },
+    username() {
+      return this.authStore.username
     }
   },
   watch: {
     currentPath(newPath) {
       this.activeMenu = newPath.slice(1)
+      this.checkAuthAndRedirect()
     }
   },
   methods: {
     handleMenuSelect(index) {
       window.location.hash = index
+    },
+    checkAuthAndRedirect() {
+      const path = this.currentPath
+      const isLoginPage = path === '#/Login' || path === '#' || path === ''
+      
+      if (!this.isAuthenticated && !isLoginPage) {
+        window.location.hash = '#/Login'
+        return
+      }
+      
+      if (this.isAuthenticated && isLoginPage) {
+        window.location.hash = '#/aws/logIntake'
+      }
+    },
+    handleLogout() {
+      this.authStore.logout()
+    },
+    handleCommand(command) {
+      if (command === 'logout') {
+        this.handleLogout()
+      }
     }
   },
   mounted() {
+    this.authStore.init()
+    this.checkAuthAndRedirect()
     this.activeMenu = this.currentPath.slice(1) || '/aws/logIntake'
     window.addEventListener('hashchange', () => {
       this.currentPath = window.location.hash
@@ -128,11 +162,6 @@ export default {
           <el-icon><Share /></el-icon>
           <template #title>工作流编排</template>
         </el-menu-item>
-        
-        <el-menu-item index="/Login">
-          <el-icon><Lock /></el-icon>
-          <template #title>权限认证</template>
-        </el-menu-item>
       </el-menu>
       
       <div class="collapse-btn" @click="isCollapse = !isCollapse">
@@ -156,15 +185,15 @@ export default {
           </el-breadcrumb>
         </div>
         <div class="header-right">
-          <el-dropdown>
+          <el-dropdown @command="handleCommand">
             <span class="user-info">
               <el-icon><UserFilled /></el-icon>
-              <span class="username">管理员</span>
+              <span class="username">{{ username || '管理员' }}</span>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item>个人信息</el-dropdown-item>
-                <el-dropdown-item divided>退出登录</el-dropdown-item>
+                <el-dropdown-item command="profile">个人信息</el-dropdown-item>
+                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -192,7 +221,6 @@ import {
   Cpu,
   Reading,
   ChatDotRound,
-  Lock,
   Expand,
   Fold,
   UserFilled,
@@ -205,7 +233,6 @@ const getBreadcrumbName = (path) => {
     '/aws/logDownLoad': 'Cloudwatch日志下载',
     '/aws/ecsInfo': 'ECS 信息查看',
     '/aws/Route': '域名路由',
-    '/Login': '权限认证',
     '/ai/KnowledgeBase': '知识库管理',
     '/ai/LLMWeb': 'RAG强化问答系统',
     '/workflow': '工作流编排'

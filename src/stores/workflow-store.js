@@ -1,8 +1,9 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { workflowEngine, WorkflowStatus } from '@/services/workflow-engine'
+import { workflowEngine, WorkflowStatus, StepStatus } from '@/services/workflow-engine'
 import { createWorkflowFromTemplate, getAllTemplates } from '@/services/workflow-templates'
 import { workflowExecutor } from '@/services/workflow-executor'
+import { workflowApiService } from '@/services/workflow-api-service'
 
 export const useWorkflowStore = defineStore('workflow', () => {
   const workflows = ref([])
@@ -386,42 +387,205 @@ export const useWorkflowStore = defineStore('workflow', () => {
     executionLogs.value = []
     
     try {
-      workflowEngine.registerWorkflow(workflow)
-      
       const execution = workflowEngine.createExecution(workflowId, runtimeVariables)
       currentExecution.value = execution
       saveCurrentExecution()
-      
-      workflowExecutor.subscribe(execution.id, (event) => {
-        executionLogs.value.push({
-          ...event,
-          timestamp: event.timestamp || new Date().toISOString()
+
+      try {
+        const apiResult = await workflowApiService.startExecution(workflowId, {
+          ...runtimeVariables,
+          workflowSnapshot: workflow
         })
         
-        if (['step_started', 'step_completed', 'step_failed', 'step_retry'].includes(event.type)) {
-          executionProgress.value = workflowEngine.getExecutionProgress(execution.id)
-          refreshExecutionState()
+        if (apiResult && apiResult.executionId) {
+          execution.id = apiResult.executionId
+          execution.status = WorkflowStatus.RUNNING
+          execution.startTime = Date.now()
+          
+          executionLogs.value.push({
+            type: 'workflow_started',
+            workflowId,
+            workflowName: workflow.name,
+            message: `工作流已提交到后端执行: ${workflow.name}`,
+            timestamp: new Date().toISOString()
+          })
+
+          workflowApiService.startPolling(
+            apiResult.executionId,
+            (statusUpdate) => {
+              updateExecutionFromApiResponse(statusUpdate)
+            }
+          )
+
+          const finalStatus = await waitForExecutionComplete(apiResult.executionId)
+          
+          isLoading.value = false
+          return finalStatus
         }
-        
-        if (['workflow_completed', 'workflow_failed'].includes(event.type)) {
-          refreshExecutionState()
-        }
-      })
-      
-      const result = await workflowExecutor.startExecution(execution, workflowEngine)
-      
-      isLoading.value = false
-      
-      executionProgress.value = workflowEngine.getExecutionProgress(execution.id)
-      refreshExecutionState()
-      
-      return result
+      } catch (apiError) {
+        console.log('后端 API 执行失败，回退到本地执行:', apiError)
+        executionLogs.value.push({
+          type: 'info',
+          message: '后端 API 不可用，使用本地执行模式',
+          timestamp: new Date().toISOString()
+        })
+      }
+
+      return await executeLocally(workflowId, runtimeVariables, execution)
       
     } catch (error) {
       isLoading.value = false
       refreshExecutionState()
       throw error
     }
+  }
+
+  async function executeLocally(workflowId, runtimeVariables = {}, execution = null) {
+    const workflow = getWorkflow(workflowId)
+    if (!workflow) {
+      throw new Error('工作流不存在')
+    }
+
+    if (!execution) {
+      execution = workflowEngine.createExecution(workflowId, runtimeVariables)
+      currentExecution.value = execution
+      saveCurrentExecution()
+    }
+
+    workflowEngine.registerWorkflow(workflow)
+    
+    workflowExecutor.subscribe(execution.id, (event) => {
+      executionLogs.value.push({
+        ...event,
+        timestamp: event.timestamp || new Date().toISOString()
+      })
+      
+      if (['step_started', 'step_completed', 'step_failed', 'step_retry'].includes(event.type)) {
+        executionProgress.value = workflowEngine.getExecutionProgress(execution.id)
+        refreshExecutionState()
+      }
+      
+      if (['workflow_completed', 'workflow_failed'].includes(event.type)) {
+        refreshExecutionState()
+      }
+    })
+    
+    const result = await workflowExecutor.startExecution(execution, workflowEngine)
+    
+    isLoading.value = false
+    
+    executionProgress.value = workflowEngine.getExecutionProgress(execution.id)
+    refreshExecutionState()
+    
+    return result
+  }
+
+  function updateExecutionFromApiResponse(apiResponse) {
+    if (!currentExecution.value) return
+
+    if (apiResponse.status) {
+      currentExecution.value.status = apiResponse.status
+    }
+    
+    if (apiResponse.stepStatuses) {
+      currentExecution.value.stepStatuses = apiResponse.stepStatuses
+    }
+
+    if (apiResponse.stepResults) {
+      currentExecution.value.stepResults = apiResponse.stepResults
+    }
+
+    if (apiResponse.logs) {
+      apiResponse.logs.forEach(log => {
+        const exists = executionLogs.value.some(
+          existing => existing.timestamp === log.timestamp && existing.message === log.message
+        )
+        if (!exists) {
+          executionLogs.value.push({
+            ...log,
+            timestamp: log.timestamp || new Date().toISOString()
+          })
+        }
+      })
+    }
+
+    if (apiResponse.startTime) {
+      currentExecution.value.startTime = new Date(apiResponse.startTime).getTime()
+    }
+
+    if (apiResponse.endTime) {
+      currentExecution.value.endTime = new Date(apiResponse.endTime).getTime()
+    }
+
+    if (apiResponse.error) {
+      currentExecution.value.error = apiResponse.error
+    }
+
+    executionProgress.value = calculateProgress(currentExecution.value)
+    saveCurrentExecution()
+    saveExecutionToHistory(currentExecution.value)
+  }
+
+  function calculateProgress(execution) {
+    if (!execution || !execution.workflowSnapshot) return null
+
+    const totalSteps = execution.workflowSnapshot.steps?.length || 0
+    const stepStatusValues = Object.values(execution.stepStatuses || {})
+    const completedSteps = stepStatusValues.filter(
+      s => s.status === StepStatus.COMPLETED
+    ).length
+    const failedSteps = stepStatusValues.filter(
+      s => s.status === StepStatus.FAILED
+    ).length
+    const runningSteps = stepStatusValues.filter(
+      s => s.status === StepStatus.RUNNING
+    ).length
+
+    return {
+      totalSteps,
+      completedSteps,
+      failedSteps,
+      runningSteps,
+      progress: totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0,
+      status: execution.status,
+      startTime: execution.startTime,
+      endTime: execution.endTime
+    }
+  }
+
+  async function waitForExecutionComplete(executionId, timeout = 300000) {
+    const startTime = Date.now()
+    const pollInterval = 2000
+
+    while (Date.now() - startTime < timeout) {
+      try {
+        const status = await workflowApiService.getExecutionStatus(executionId)
+        updateExecutionFromApiResponse(status)
+
+        if (status.status === WorkflowStatus.COMPLETED) {
+          workflowApiService.stopPolling(executionId)
+          return { success: true, executionId, status: status.status }
+        }
+
+        if (status.status === WorkflowStatus.FAILED) {
+          workflowApiService.stopPolling(executionId)
+          return { success: false, executionId, status: status.status, error: status.error }
+        }
+
+        if (status.status === WorkflowStatus.CANCELLED) {
+          workflowApiService.stopPolling(executionId)
+          return { success: false, executionId, status: status.status, error: '执行已取消' }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+      } catch (error) {
+        console.error('轮询执行状态失败:', error)
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+      }
+    }
+
+    workflowApiService.stopPolling(executionId)
+    throw new Error('执行超时')
   }
 
   function getExecutionLogs() {
