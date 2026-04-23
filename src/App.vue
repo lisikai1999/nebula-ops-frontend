@@ -5,6 +5,7 @@ import AWSLogDownLoad from './components/AWS/CloudWatch/logdown.vue'
 import AWSLogIntake from './components/AWS/CloudWatch/LogIntake.vue'
 import AWSUserManage from './components/AWS/SecurityHub/usermange.vue'
 import Route from './components/AWS/Route/Route.vue'
+import AthenaQuery from './components/AWS/Athena/AthenaQuery.vue'
 import KnowledgeBase from './components/AI/knowledge_base.vue'
 import LLMWeb from './components/AI/LLMWeb.vue'
 import WorkflowView from './components/Workflow/WorkflowView.vue'
@@ -18,6 +19,7 @@ const routes = {
   '/aws/logIntake': AWSLogIntake,
   '/aws/logDownLoad': AWSLogDownLoad,
   '/aws/Route': Route,
+  '/aws/athenaQuery': AthenaQuery,
   '/ai/KnowledgeBase': KnowledgeBase,
   '/ai/LLMWeb': LLMWeb,
   '/workflow': WorkflowView,
@@ -141,6 +143,10 @@ export default {
             <el-icon><Connection /></el-icon>
             <template #title>域名路由</template>
           </el-menu-item>
+          <el-menu-item index="/aws/athenaQuery">
+            <el-icon><DataLine /></el-icon>
+            <template #title>Athena SQL 查询</template>
+          </el-menu-item>
         </el-sub-menu>
         
         <el-sub-menu index="ai">
@@ -224,7 +230,8 @@ import {
   Expand,
   Fold,
   UserFilled,
-  Share
+  Share,
+  DataLine
 } from '@element-plus/icons-vue'
 
 const getBreadcrumbName = (path) => {
@@ -233,6 +240,7 @@ const getBreadcrumbName = (path) => {
     '/aws/logDownLoad': 'Cloudwatch日志下载',
     '/aws/ecsInfo': 'ECS 信息查看',
     '/aws/Route': '域名路由',
+    '/aws/athenaQuery': 'Athena SQL 查询',
     '/ai/KnowledgeBase': '知识库管理',
     '/ai/LLMWeb': 'RAG强化问答系统',
     '/workflow': '工作流编排'
