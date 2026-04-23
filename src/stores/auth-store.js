@@ -49,7 +49,11 @@ export const useAuthStore = defineStore('auth', () => {
       })
 
       if (response.status === 200) {
-        const authToken = response.data?.token || csrftoken || `token_${Date.now()}`
+        const authToken = response.data?.token || csrftoken
+        if (!authToken) {
+          throw new Error('登录失败：未获取到认证令牌')
+        }
+        
         token.value = authToken
         
         user.value = {
@@ -65,18 +69,22 @@ export const useAuthStore = defineStore('auth', () => {
         throw new Error('登录失败，请检查用户名或密码')
       }
     } catch (error) {
-      console.log('Login error:', error)
+      console.error('Login error:', error)
       
-      const mockToken = `mock_token_${Date.now()}`
-      token.value = mockToken
-      user.value = {
-        username: usernameInput,
-        loginTime: new Date().toISOString()
+      let errorMessage = '登录失败，请检查用户名或密码'
+      if (error.response) {
+        if (error.response.status === 401) {
+          errorMessage = '用户名或密码错误'
+        } else if (error.response.status === 403) {
+          errorMessage = '账户已被禁用'
+        } else if (error.response.data?.message) {
+          errorMessage = error.response.data.message
+        }
+      } else if (error.message && !error.message.includes('Network Error')) {
+        errorMessage = error.message
       }
-      localStorage.setItem(AUTH_TOKEN_KEY, token.value)
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user.value))
       
-      return { success: true, message: '登录成功（演示模式）' }
+      throw new Error(errorMessage)
     }
   }
 
