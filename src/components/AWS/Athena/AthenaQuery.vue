@@ -442,9 +442,12 @@ const fetchEnvironments = async () => {
     const response = await axios.get('/api/aws/athena/environments');
     if (response.data.status === 'success') {
       environments.value = response.data.data || [];
+    } else {
+      ElMessage.error(response.data.message || '获取环境列表失败');
     }
   } catch (error) {
     console.error('获取环境列表失败:', error);
+    ElMessage.error('获取环境列表失败: ' + (error.response?.data?.message || error.message || '网络异常'));
   } finally {
     envLoading.value = false;
   }
@@ -461,9 +464,12 @@ const fetchDatabases = async () => {
     const response = await axios.get(`/api/aws/athena/databases?env=${selectedEnvironment.value}`);
     if (response.data.status === 'success') {
       databases.value = response.data.data || [];
+    } else {
+      ElMessage.error(response.data.message || '获取数据库列表失败');
     }
   } catch (error) {
     console.error('获取数据库列表失败:', error);
+    ElMessage.error('获取数据库列表失败: ' + (error.response?.data?.message || error.message || '网络异常'));
   } finally {
     dbLoading.value = false;
   }
@@ -480,9 +486,12 @@ const fetchTables = async (database) => {
     const response = await axios.get(`/api/aws/athena/tables?env=${selectedEnvironment.value}&database=${database}`);
     if (response.data.status === 'success') {
       tables.value = response.data.data || [];
+    } else {
+      ElMessage.error(response.data.message || '获取数据表列表失败');
     }
   } catch (error) {
     console.error('获取数据表列表失败:', error);
+    ElMessage.error('获取数据表列表失败: ' + (error.response?.data?.message || error.message || '网络异常'));
   } finally {
     tableLoading.value = false;
   }
