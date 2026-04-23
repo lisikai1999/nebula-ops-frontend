@@ -1,4 +1,6 @@
 <script>
+import { useAuthStore } from '../stores/auth-store'
+
 export default {
     name: 'Login',
     data() {
@@ -20,6 +22,11 @@ export default {
             showPassword: false
         };
     },
+    computed: {
+        authStore() {
+            return useAuthStore()
+        }
+    },
     methods: {
         async submitLogin(formEl) {
             if (!formEl) return;
@@ -29,34 +36,19 @@ export default {
                     this.loading = true;
                     
                     try {
-                        await axios.get('/api/login/');
-                        const csrftoken = document.cookie.match(/csrftoken=([\w-]+)/)?.[1];
-
-                        const formData = new FormData();
-                        formData.append('username', this.form.username);
-                        formData.append('password', this.form.password);
+                        const result = await this.authStore.login(this.form.username, this.form.password)
                         
-                        const response = await axios.post("/api/aws/login", formData, {
-                            headers: {
-                                'X-CSRFToken': csrftoken,
-                                'Content-Type': 'application/json'
-                            }
-                        });
-
-                        if (response.status === 200) {
-                            this.$message.success('登录成功！');
+                        if (result.success) {
+                            this.$message.success(result.message);
                             setTimeout(() => {
-                                window.location.href = '#/aws/logDownLoad';
+                                window.location.href = '#/aws/logIntake';
                             }, 500);
                         } else {
                             this.$message.error('登录失败，请检查用户名或密码。');
                         }
                     } catch (error) {
                         console.log(error);
-                        this.$message.success('登录成功（演示模式）');
-                        setTimeout(() => {
-                            window.location.href = '#/aws/logIntake';
-                        }, 500);
+                        this.$message.error('登录失败：' + error.message);
                     } finally {
                         this.loading = false;
                     }
