@@ -294,14 +294,15 @@ export default {
             </div>
         </el-card>
 
-        <div v-if="process" class="global-loading-container">
-            <div class="loading-content">
-                <el-icon class="loading-icon"><Loading /></el-icon>
-                <span class="loading-text">正在加载图表数据...</span>
+        <div class="charts-wrapper">
+            <div v-show="process" class="global-loading-container">
+                <div class="loading-content">
+                    <el-icon class="loading-icon"><Loading /></el-icon>
+                    <span class="loading-text">正在加载图表数据...</span>
+                </div>
             </div>
-        </div>
 
-        <div v-else class="charts-container">
+            <div class="charts-container" :style="{ opacity: process ? 0.3 : 1 }">
             <el-row :gutter="24">
                 <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="8">
                     <el-card class="chart-card" shadow="hover">
@@ -612,6 +613,7 @@ export default {
                 </el-col>
             </el-row>
         </div>
+        </div>
     </div>
 </template>
 
@@ -622,6 +624,10 @@ import { DataLine, Refresh, Loading } from '@element-plus/icons-vue';
 <style scoped>
 .log-intake-page {
     min-height: 100%;
+}
+
+.charts-wrapper {
+    position: relative;
 }
 
 .page-header-card {
@@ -662,10 +668,17 @@ import { DataLine, Refresh, Loading } from '@element-plus/icons-vue';
 }
 
 .global-loading-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 400px;
+    background-color: rgba(255, 255, 255, 0.9);
+    z-index: 100;
+    border-radius: 8px;
 }
 
 .global-loading-container .loading-content {
