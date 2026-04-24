@@ -1,8 +1,14 @@
 # Workflow 工作流后端 API 文档
 
-> 文档版本: v1.0\
-> 基础路径: `/api/workflow`\
+> 文档版本: v1.2\
+> 基础路径: `/workflow`\
 > 创建日期: 2026-04-24
+> 
+> **重要说明**: 由于 Vite 开发服务器代理配置会去掉 `/api` 前缀，前端请求 `/api/workflow/xxx` 会被转发到后端 `/workflow/xxx`。因此后端接口路径应使用 `/workflow` 作为基础路径。
+> 
+> **更新记录**:
+> - v1.2: 修正所有接口路径（去掉 `/api` 前缀），添加前端/后端路径对照表，添加更新记录章节
+> - v1.1: 修正 `execute` 接口请求体结构，`workflowSnapshot` 作为独立字段发送
 
 ***
 
@@ -14,6 +20,7 @@
 4. [数据模型定义](#四数据模型定义)
 5. [步骤类型配置](#五步骤类型配置)
 6. [注意事项](#六注意事项)
+7. [接口汇总](#七接口汇总)
 
 ***
 
@@ -60,13 +67,23 @@ Content-Type: application/json
 | 404 | 资源不存在    |
 | 500 | 服务器内部错误  |
 
+### 1.3 路径对照表
+
+| 前端请求路径 | 后端实际路径 | 说明 |
+| -------- | -------- | --- |
+| `/api/workflow/list` | `/workflow/list` | Vite 代理会去掉 `/api` 前缀 |
+| `/api/workflow/{id}` | `/workflow/{id}` | Vite 代理会去掉 `/api` 前缀 |
+| 其他 `/api/workflow/*` | `/workflow/*` | 以此类推 |
+
 ***
 
 ## 二、工作流管理 API
 
 ### 2.1 获取工作流列表
 
-**接口:** `GET /api/workflow/list`
+**接口:** `GET /workflow/list`
+
+**前端请求:** `GET /api/workflow/list`
 
 **功能:** 获取当前用户的所有工作流列表
 
@@ -127,7 +144,9 @@ Authorization: Bearer {token}
 
 ### 2.2 获取单个工作流详情
 
-**接口:** `GET /api/workflow/{workflowId}`
+**接口:** `GET /workflow/{workflowId}`
+
+**前端请求:** `GET /api/workflow/{workflowId}`
 
 **功能:** 根据 ID 获取工作流详细信息
 
@@ -149,7 +168,9 @@ Authorization: Bearer {token}
 
 ### 2.3 创建工作流
 
-**接口:** `POST /api/workflow/create`
+**接口:** `POST /workflow/create`
+
+**前端请求:** `POST /api/workflow/create`
 
 **功能:** 创建新的工作流
 
@@ -215,7 +236,9 @@ Content-Type: application/json
 
 ### 2.4 更新工作流
 
-**接口:** `PUT /api/workflow/{workflowId}`
+**接口:** `PUT /workflow/{workflowId}`
+
+**前端请求:** `PUT /api/workflow/{workflowId}`
 
 **功能:** 更新工作流信息
 
@@ -256,7 +279,9 @@ Content-Type: application/json
 
 ### 2.5 删除工作流
 
-**接口:** `DELETE /api/workflow/{workflowId}`
+**接口:** `DELETE /workflow/{workflowId}`
+
+**前端请求:** `DELETE /api/workflow/{workflowId}`
 
 **功能:** 删除指定工作流
 
@@ -287,7 +312,9 @@ Authorization: Bearer {token}
 
 ### 3.1 执行工作流
 
-**接口:** `POST /api/workflow/execute`
+**接口:** `POST /workflow/execute`
+
+**前端请求:** `POST /api/workflow/execute`
 
 **功能:** 启动工作流执行
 
@@ -311,7 +338,8 @@ Content-Type: application/json
     "id": "workflow_1713926400000",
     "name": "部署流水线",
     "steps": [],
-    "...": "完整工作流快照"
+    "variables": {},
+    "settings": {}
   }
 }
 ```
@@ -323,6 +351,10 @@ Content-Type: application/json
 | workflowId       | string | 是  | 工作流ID             |
 | variables        | object | 否  | 运行时变量，会覆盖工作流定义的变量 |
 | workflowSnapshot | object | 是  | 完整的工作流快照，包含所有步骤配置 |
+
+**重要说明:**
+- `workflowSnapshot` 是**独立字段**，不是在 `variables` 内部
+- 前端代码已修正，`workflowSnapshot` 现在作为独立字段发送
 
 **响应示例:**
 
@@ -345,7 +377,9 @@ Content-Type: application/json
 
 ### 3.2 获取执行状态
 
-**接口:** `GET /api/workflow/execution/{executionId}`
+**接口:** `GET /workflow/execution/{executionId}`
+
+**前端请求:** `GET /api/workflow/execution/{executionId}`
 
 **功能:** 获取执行实例的当前状态（轮询接口）
 
@@ -417,7 +451,7 @@ Authorization: Bearer {token}
 
 **轮询说明:**
 
-- 前端默认每 2 秒轮询一次此接口
+- 前端默认每 2 秒调用一次 `GET /workflow/execution/{executionId}` 获取执行状态
 - 当状态为 `completed`、`failed` 或 `cancelled` 时，前端停止轮询
 - 建议后端控制日志返回量，避免单次返回过多数据
 
@@ -425,7 +459,9 @@ Authorization: Bearer {token}
 
 ### 3.3 获取执行日志
 
-**接口:** `GET /api/workflow/execution/{executionId}/logs`
+**接口:** `GET /workflow/execution/{executionId}/logs`
+
+**前端请求:** `GET /api/workflow/execution/{executionId}/logs`
 
 **功能:** 获取执行实例的完整日志
 
@@ -466,7 +502,9 @@ Authorization: Bearer {token}
 
 ### 3.4 取消执行
 
-**接口:** `POST /api/workflow/execution/{executionId}/cancel`
+**接口:** `POST /workflow/execution/{executionId}/cancel`
+
+**前端请求:** `POST /api/workflow/execution/{executionId}/cancel`
 
 **功能:** 取消正在执行的工作流
 
@@ -500,7 +538,9 @@ Authorization: Bearer {token}
 
 ### 3.5 暂停执行
 
-**接口:** `POST /api/workflow/execution/{executionId}/pause`
+**接口:** `POST /workflow/execution/{executionId}/pause`
+
+**前端请求:** `POST /api/workflow/execution/{executionId}/pause`
 
 **功能:** 暂停正在执行的工作流
 
@@ -534,7 +574,9 @@ Authorization: Bearer {token}
 
 ### 3.6 恢复执行
 
-**接口:** `POST /api/workflow/execution/{executionId}/resume`
+**接口:** `POST /workflow/execution/{executionId}/resume`
+
+**前端请求:** `POST /api/workflow/execution/{executionId}/resume`
 
 **功能:** 恢复已暂停的工作流
 
@@ -568,7 +610,9 @@ Authorization: Bearer {token}
 
 ### 3.7 获取执行历史
 
-**接口:** `GET /api/workflow/history`
+**接口:** `GET /workflow/history`
+
+**前端请求:** `GET /api/workflow/history`
 
 **功能:** 获取执行历史记录
 
@@ -910,7 +954,7 @@ interface LogEntry {
 
 ### 6.1 轮询机制
 
-- 前端默认每 2 秒调用一次 `GET /api/workflow/execution/{executionId}` 获取执行状态
+- 前端默认每 2 秒调用一次 `GET /workflow/execution/{executionId}` 获取执行状态
 - 当状态为 `completed`、`failed` 或 `cancelled` 时，前端停止轮询
 - 建议后端在执行完成后及时更新状态，避免前端长时间轮询
 
@@ -937,6 +981,7 @@ interface LogEntry {
 ### 6.4 工作流快照
 
 - 执行工作流时，前端会发送完整的工作流快照 (`workflowSnapshot`)
+- `workflowSnapshot` 是**独立字段**，不是在 `variables` 内部
 - 后端可以选择:
   1. 使用快照中的配置执行 (推荐，保证执行时的配置一致性)
   2. 忽略快照，从数据库加载最新版本
@@ -970,23 +1015,60 @@ interface LogEntry {
 
 ## 七、接口汇总
 
-| 方法     | 路径                                           | 功能         | 优先级 |
-| ------ | -------------------------------------------- | ---------- | --- |
-| GET    | /api/workflow/list                           | 获取工作流列表    | 高   |
-| GET    | /api/workflow/{workflowId}                   | 获取工作流详情    | 高   |
-| POST   | /api/workflow/create                         | 创建工作流      | 高   |
-| PUT    | /api/workflow/{workflowId}                   | 更新工作流      | 高   |
-| DELETE | /api/workflow/{workflowId}                   | 删除工作流      | 高   |
-| POST   | /api/workflow/execute                        | 执行工作流      | 高   |
-| GET    | /api/workflow/execution/{executionId}        | 获取执行状态(轮询) | 高   |
-| GET    | /api/workflow/execution/{executionId}/logs   | 获取执行日志     | 中   |
-| POST   | /api/workflow/execution/{executionId}/cancel | 取消执行       | 中   |
-| POST   | /api/workflow/execution/{executionId}/pause  | 暂停执行       | 低   |
-| POST   | /api/workflow/execution/{executionId}/resume | 恢复执行       | 低   |
-| GET    | /api/workflow/history                        | 获取执行历史     | 中   |
+| 方法     | 后端路径                                     | 前端请求路径                                  | 功能         | 优先级 |
+| ------ | ---------------------------------------- | ----------------------------------------- | ---------- | --- |
+| GET    | /workflow/list                           | /api/workflow/list                        | 获取工作流列表    | 高   |
+| GET    | /workflow/{workflowId}                   | /api/workflow/{workflowId}                | 获取工作流详情    | 高   |
+| POST   | /workflow/create                         | /api/workflow/create                      | 创建工作流      | 高   |
+| PUT    | /workflow/{workflowId}                   | /api/workflow/{workflowId}                | 更新工作流      | 高   |
+| DELETE | /workflow/{workflowId}                   | /api/workflow/{workflowId}                | 删除工作流      | 高   |
+| POST   | /workflow/execute                        | /api/workflow/execute                     | 执行工作流      | 高   |
+| GET    | /workflow/execution/{executionId}        | /api/workflow/execution/{executionId}     | 获取执行状态(轮询) | 高   |
+| GET    | /workflow/execution/{executionId}/logs   | /api/workflow/execution/{executionId}/logs| 获取执行日志     | 中   |
+| POST   | /workflow/execution/{executionId}/cancel | /api/workflow/execution/{executionId}/cancel | 取消执行       | 中   |
+| POST   | /workflow/execution/{executionId}/pause  | /api/workflow/execution/{executionId}/pause | 暂停执行       | 低   |
+| POST   | /workflow/execution/{executionId}/resume | /api/workflow/execution/{executionId}/resume | 恢复执行       | 低   |
+| GET    | /workflow/history                        | /api/workflow/history                     | 获取执行历史     | 中   |
+
+***
+
+## 八、更新记录
+
+### v1.2 (2026-04-24)
+
+**修正内容:**
+
+1. **接口路径修正**
+   - 所有后端接口路径从 `/api/workflow/*` 改为 `/workflow/*`
+   - 原因: Vite 开发服务器代理配置 `rewrite: path => path.replace(/^\/api/, '')` 会去掉 `/api` 前缀
+   - 影响: 所有接口路径
+   - 添加"路径对照表"和"前端/后端路径对照表"
+
+2. **文档结构优化**
+   - 添加"更新记录"章节
+   - 添加"路径对照表"章节
+   - 接口汇总表中同时列出后端路径和前端请求路径
+
+### v1.1 (2026-04-24)
+
+**修正内容:**
+
+1. **execute 接口请求体结构修正**
+   - `workflowSnapshot` 从 `variables` 内部改为独立字段
+   - 原因: 原前端代码将 `workflowSnapshot` 错误地放在 `variables` 内部，已修正
+   - 影响: `POST /workflow/execute` 接口
+   - 相关代码修改:
+     - `src/services/workflow-api-service.js:78-95`: `startExecution` 方法新增 `workflowSnapshot` 参数
+     - `src/stores/workflow-store.js:402`: 调用方式从 `startExecution(workflowId, {...variables, workflowSnapshot})` 改为 `startExecution(workflowId, variables, workflowSnapshot)`
+
+**请求体结构对比:**
+
+| 版本 | 结构 |
+| --- | --- |
+| v1.0 (错误) | `{ workflowId, variables: { ..., workflowSnapshot } }` |
+| v1.1+ (正确) | `{ workflowId, variables: {}, workflowSnapshot: {} }` |
 
 ***
 
 > 文档结束\
 > 如有问题请联系前端开发团队
-
