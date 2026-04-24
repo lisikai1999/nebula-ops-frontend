@@ -26,10 +26,18 @@ export class WorkflowApiService {
   }
 
   handleResponse(response) {
-    if (response.data && response.data.status === 'success') {
+    if (!response.data) {
+      throw new Error('响应数据为空')
+    }
+
+    const isSuccessStatus = response.data.status === 'success'
+    const isSuccessCode = response.data.code === 200 || response.data.code === 0
+
+    if (isSuccessStatus || isSuccessCode) {
       return response.data.data
     }
-    throw new Error(response.data?.message || '请求失败')
+
+    throw new Error(response.data?.message || response.data?.msg || '请求失败')
   }
 
   async createWorkflow(workflowData) {
