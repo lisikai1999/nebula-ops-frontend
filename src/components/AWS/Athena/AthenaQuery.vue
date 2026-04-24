@@ -368,14 +368,11 @@ const tableLoading = ref(false);
 const queryLoading = ref(false);
 
 const environments = ref([
-  { id: 'china dev', name: 'china dev', is_default: false },
-  { id: 'china dev-staging', name: 'china dev-staging', is_default: false },
   { id: 'china prod', name: 'china prod', is_default: true },
   { id: 'singapore-dev', name: 'singapore-dev', is_default: false },
   { id: 'singapore-staging', name: 'singapore-staging', is_default: false },
   { id: 'singapore-prod', name: 'singapore-prod', is_default: false },
-  { id: 'usa-prod', name: 'usa-prod', is_default: false },
-  { id: 'Spain-prod', name: 'Spain-prod', is_default: false }
+  { id: 'usa-prod', name: 'usa-prod', is_default: false }
 ]);
 const selectedEnvironment = ref('');
 const databases = ref([]);
