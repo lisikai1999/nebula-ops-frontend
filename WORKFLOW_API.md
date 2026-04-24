@@ -1,12 +1,13 @@
 # Workflow 工作流后端 API 文档
 
-> 文档版本: v1.2\
+> 文档版本: v1.3\
 > 基础路径: `/workflow`\
 > 创建日期: 2026-04-24
 > 
 > **重要说明**: 由于 Vite 开发服务器代理配置会去掉 `/api` 前缀，前端请求 `/api/workflow/xxx` 会被转发到后端 `/workflow/xxx`。因此后端接口路径应使用 `/workflow` 作为基础路径。
 > 
 > **更新记录**:
+> - v1.3: 统一响应格式为 `{ status, data, message }`，与项目其他组件保持一致
 > - v1.2: 修正所有接口路径（去掉 `/api` 前缀），添加前端/后端路径对照表，添加更新记录章节
 > - v1.1: 修正 `execute` 接口请求体结构，`workflowSnapshot` 作为独立字段发送
 
@@ -39,11 +40,13 @@ Content-Type: application/json
 
 ### 1.2 响应格式
 
+**重要**: 本项目所有接口统一使用以下响应格式（与 Athena 等其他模块保持一致）：
+
 #### 成功响应
 
 ```json
 {
-  "code": 200,
+  "status": "success",
   "data": { ... }
 }
 ```
@@ -52,20 +55,18 @@ Content-Type: application/json
 
 ```json
 {
-  "code": 400,
+  "status": "error",
   "message": "错误描述信息"
 }
 ```
 
-#### 常见错误码
+#### 状态字段说明
 
-| 错误码 | 说明       |
-| --- | -------- |
-| 400 | 请求参数错误   |
-| 401 | 未授权，请先登录 |
-| 403 | 权限不足     |
-| 404 | 资源不存在    |
-| 500 | 服务器内部错误  |
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `status` | string | 状态: `success` 或 `error` |
+| `data` | any | 成功时返回的数据 |
+| `message` | string | 错误时的描述信息 |
 
 ### 1.3 路径对照表
 
@@ -97,7 +98,7 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "code": 200,
+  "status": "success",
   "data": [
     {
       "id": "workflow_1713926400000",
@@ -162,7 +163,7 @@ Authorization: Bearer {token}
 Authorization: Bearer {token}
 ```
 
-**响应示例:** 同上单个工作流对象
+**响应示例:** 同上单个工作流对象，包裹在 `{ "status": "success", "data": { ... } }` 中
 
 ***
 
@@ -223,7 +224,7 @@ Content-Type: application/json
 
 ```json
 {
-  "code": 200,
+  "status": "success",
   "data": {
     "id": "workflow_1713926400000",
     "name": "工作流名称",
@@ -273,7 +274,7 @@ Content-Type: application/json
 }
 ```
 
-**响应示例:** 更新后的完整工作流对象
+**响应示例:** 更新后的完整工作流对象，包裹在 `{ "status": "success", "data": { ... } }` 中
 
 ***
 
@@ -301,8 +302,10 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "code": 200,
-  "message": "删除成功"
+  "status": "success",
+  "data": {
+    "message": "删除成功"
+  }
 }
 ```
 
@@ -360,7 +363,7 @@ Content-Type: application/json
 
 ```json
 {
-  "code": 200,
+  "status": "success",
   "data": {
     "executionId": "exec_1713926400000_abcdefg"
   }
@@ -399,7 +402,7 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "code": 200,
+  "status": "success",
   "data": {
     "id": "exec_1713926400000_abcdefg",
     "workflowId": "workflow_1713926400000",
@@ -481,7 +484,7 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "code": 200,
+  "status": "success",
   "data": [
     {
       "type": "info",
@@ -526,7 +529,7 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "code": 200,
+  "status": "success",
   "data": {
     "status": "cancelled",
     "message": "执行已取消"
@@ -562,7 +565,7 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "code": 200,
+  "status": "success",
   "data": {
     "status": "paused",
     "message": "执行已暂停"
@@ -598,7 +601,7 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "code": 200,
+  "status": "success",
   "data": {
     "status": "running",
     "message": "执行已恢复"
@@ -632,7 +635,7 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "code": 200,
+  "status": "success",
   "data": [
     {
       "id": "exec_1713926400000_abcdefg",
@@ -1033,6 +1036,24 @@ interface LogEntry {
 ***
 
 ## 八、更新记录
+
+### v1.3 (2026-04-24)
+
+**修正内容:**
+
+1. **统一响应格式**
+   - 所有接口响应从 `{ code, data }` 改为 `{ status, data, message }`
+   - 原因: 与项目其他组件（如 Athena）保持一致，前端代码已更新为统一处理逻辑
+   - 影响: 所有接口响应格式
+   - 相关代码修改:
+     - `src/services/workflow-api-service.js:28-33`: 新增 `handleResponse` 方法，统一解析响应
+
+**响应格式对比:**
+
+| 版本 | 成功响应 | 错误响应 |
+| --- | --- | --- |
+| v1.2 (错误) | `{ "code": 200, "data": {} }` | `{ "code": 400, "message": "..." }` |
+| v1.3+ (正确) | `{ "status": "success", "data": {} }` | `{ "status": "error", "message": "..." }` |
 
 ### v1.2 (2026-04-24)
 

@@ -25,6 +25,13 @@ export class WorkflowApiService {
     }
   }
 
+  handleResponse(response) {
+    if (response.data && response.data.status === 'success') {
+      return response.data.data
+    }
+    throw new Error(response.data?.message || '请求失败')
+  }
+
   async createWorkflow(workflowData) {
     const headers = this.getAuthHeaders()
     
@@ -32,7 +39,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async updateWorkflow(workflowId, updates) {
@@ -42,7 +49,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async deleteWorkflow(workflowId) {
@@ -52,7 +59,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async getWorkflow(workflowId) {
@@ -62,7 +69,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async getAllWorkflows() {
@@ -72,7 +79,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async startExecution(workflowId, runtimeVariables = {}, workflowSnapshot = null) {
@@ -91,7 +98,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async getExecutionStatus(executionId) {
@@ -101,7 +108,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async getExecutionLogs(executionId) {
@@ -111,7 +118,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async cancelExecution(executionId) {
@@ -121,7 +128,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async pauseExecution(executionId) {
@@ -131,7 +138,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async resumeExecution(executionId) {
@@ -141,7 +148,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   async getExecutionHistory(workflowId = null) {
@@ -154,7 +161,7 @@ export class WorkflowApiService {
       headers
     })
     
-    return response.data
+    return this.handleResponse(response)
   }
 
   startPolling(executionId, callback, interval = 2000) {
