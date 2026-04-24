@@ -399,10 +399,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
         timestamp: new Date().toISOString()
       })
 
-      const apiResult = await workflowApiService.startExecution(workflowId, {
-        ...runtimeVariables,
-        workflowSnapshot: workflow
-      })
+      const apiResult = await workflowApiService.startExecution(workflowId, runtimeVariables, workflow)
       
       if (!apiResult || !apiResult.executionId) {
         throw new Error('后端返回的执行 ID 无效')

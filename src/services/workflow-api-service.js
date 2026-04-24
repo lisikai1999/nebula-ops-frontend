@@ -75,12 +75,16 @@ export class WorkflowApiService {
     return response.data
   }
 
-  async startExecution(workflowId, runtimeVariables = {}) {
+  async startExecution(workflowId, runtimeVariables = {}, workflowSnapshot = null) {
     const headers = this.getAuthHeaders()
     
     const payload = {
       workflowId,
       variables: runtimeVariables
+    }
+    
+    if (workflowSnapshot) {
+      payload.workflowSnapshot = workflowSnapshot
     }
     
     const response = await axios.post(`${this.baseUrl}/execute`, payload, {
