@@ -1,5 +1,6 @@
 <script>
 import TaskDefineJson from './TaskDefineJson.vue'
+import { useAwsEnvironmentsStore } from '@/stores/aws-environments'
 
 export default {
     name: 'EcsInfo',
@@ -9,7 +10,7 @@ export default {
     data() {
         return {
             loading: false,
-            envs: ["china dev", "china dev-staging", "china prod", "singapore-dev", "singapore-staging", "singapore-prod", "usa-prod"],
+            envLoading: false,
             env: '',
             headers: [
                 { text: "集群", value: "cluster", sortable: true, fixed: true },
@@ -54,6 +55,12 @@ export default {
         };
     },
     computed: {
+        awsEnvironmentsStore() {
+            return useAwsEnvironmentsStore();
+        },
+        envs() {
+            return this.awsEnvironmentsStore.environments.map(envItem => envItem.name);
+        },
         filteredItems() {
             if (!this.searchValue) {
                 return this.items;
@@ -78,6 +85,23 @@ export default {
         activeTaskDefineJson(item) {
             this.activeDefine = !this.activeDefine;
             this.taskDefine = item['taskDefinitionInfo'];
+        },
+        async loadEnvironments() {
+            this.envLoading = true;
+            try {
+                await this.awsEnvironmentsStore.fetchEnvironments();
+                
+                if (this.awsEnvironmentsStore.selectedEnvironmentId) {
+                    const selectedEnv = this.awsEnvironmentsStore.selectedEnvironment;
+                    if (selectedEnv) {
+                        this.env = selectedEnv.name;
+                    }
+                }
+            } catch (error) {
+                console.error('加载环境列表失败:', error);
+            } finally {
+                this.envLoading = false;
+            }
         },
         async get_ecs_service_info() {
             if (!this.env) {
@@ -113,7 +137,7 @@ export default {
         }
     },
     mounted() {
-        
+        this.loadEnvironments();
     }
 };
 </script>
