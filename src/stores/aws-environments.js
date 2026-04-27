@@ -70,7 +70,7 @@ export const useAwsEnvironmentsStore = defineStore('awsEnvironments', () => {
       }
     } catch (error) {
       console.error('获取AWS环境列表失败:', error)
-      ElMessage.error(error.response?.data?.message || error.message || '获取环境列表失败')
+      ElMessage.error('获取环境列表失败，请稍后重试')
       return []
     } finally {
       isLoading.value = false
@@ -97,7 +97,7 @@ export const useAwsEnvironmentsStore = defineStore('awsEnvironments', () => {
       }
     } catch (error) {
       console.error('创建AWS环境失败:', error)
-      ElMessage.error(error.response?.data?.message || error.message || '创建环境失败')
+      ElMessage.error('创建环境失败，请稍后重试')
       throw error
     } finally {
       isLoading.value = false
@@ -124,7 +124,7 @@ export const useAwsEnvironmentsStore = defineStore('awsEnvironments', () => {
       }
     } catch (error) {
       console.error('更新AWS环境失败:', error)
-      ElMessage.error(error.response?.data?.message || error.message || '更新环境失败')
+      ElMessage.error('更新环境失败，请稍后重试')
       throw error
     } finally {
       isLoading.value = false
@@ -153,7 +153,7 @@ export const useAwsEnvironmentsStore = defineStore('awsEnvironments', () => {
       }
     } catch (error) {
       console.error('删除AWS环境失败:', error)
-      ElMessage.error(error.response?.data?.message || error.message || '删除环境失败')
+      ElMessage.error('删除环境失败，请稍后重试')
       throw error
     } finally {
       isLoading.value = false
@@ -180,7 +180,7 @@ export const useAwsEnvironmentsStore = defineStore('awsEnvironments', () => {
       }
     } catch (error) {
       console.error('设置默认环境失败:', error)
-      ElMessage.error(error.response?.data?.message || error.message || '设置默认环境失败')
+      ElMessage.error('设置默认环境失败，请稍后重试')
       throw error
     } finally {
       isLoading.value = false

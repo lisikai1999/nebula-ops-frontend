@@ -554,7 +554,7 @@ const updateChart = async () => {
     
   } catch (err) {
     console.error('Failed to update chart:', err);
-    ElMessage.error('获取数据失败: ' + (err.message || '未知错误'));
+    ElMessage.error('获取数据失败，请稍后重试');
   } finally {
     loadingChart.value = false;
   }
