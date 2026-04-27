@@ -240,20 +240,24 @@ const formRules = {
   ],
   secret_access_key: [
     { 
-      required: true, 
-      message: '请输入 Secret Access Key', 
-      trigger: 'blur',
       validator: (rule, value, callback) => {
-        if (isEdit.value && !value) {
-          callback()
-        } else if (!value) {
-          callback(new Error('请输入 Secret Access Key'))
-        } else if (value.length < 30) {
-          callback(new Error('Secret Access Key 长度至少 30 个字符'))
+        if (isEdit.value) {
+          if (value && value.length < 30) {
+            callback(new Error('Secret Access Key 长度至少 30 个字符'))
+          } else {
+            callback()
+          }
         } else {
-          callback()
+          if (!value) {
+            callback(new Error('请输入 Secret Access Key'))
+          } else if (value.length < 30) {
+            callback(new Error('Secret Access Key 长度至少 30 个字符'))
+          } else {
+            callback()
+          }
         }
-      }
+      },
+      trigger: ['blur', 'change']
     }
   ],
   region: [
