@@ -344,7 +344,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   DataLine,
@@ -361,19 +361,23 @@ import {
   Check,
   Close
 } from '@element-plus/icons-vue';
+import { useAwsEnvironmentsStore } from '@/stores/aws-environments';
 
-const envLoading = ref(false);
+const awsEnvironmentsStore = useAwsEnvironmentsStore();
+
+const envLoading = computed(() => awsEnvironmentsStore.isLoading);
 const dbLoading = ref(false);
 const tableLoading = ref(false);
 const queryLoading = ref(false);
 
-const environments = ref([
-  { id: 'china prod', name: 'china prod', is_default: true },
-  { id: 'singapore-dev', name: 'singapore-dev', is_default: false },
-  { id: 'singapore-staging', name: 'singapore-staging', is_default: false },
-  { id: 'singapore-prod', name: 'singapore-prod', is_default: false },
-  { id: 'usa-prod', name: 'usa-prod', is_default: false }
-]);
+const environments = computed(() => {
+  return awsEnvironmentsStore.environments.map(envItem => ({
+    id: envItem.name,
+    name: envItem.name,
+    is_default: envItem.is_default
+  }));
+});
+
 const selectedEnvironment = ref('');
 const databases = ref([]);
 const tables = ref([]);
@@ -434,19 +438,18 @@ const formatSql = () => {
 };
 
 const fetchEnvironments = async () => {
-  envLoading.value = true;
   try {
-    const response = await axios.get('/api/aws/athena/environments');
-    if (response.data.status === 'success') {
-      environments.value = response.data.data || [];
-    } else {
-      ElMessage.error(response.data.message || '获取环境列表失败');
+    await awsEnvironmentsStore.fetchEnvironments();
+    
+    if (awsEnvironmentsStore.selectedEnvironmentId) {
+      const selectedEnv = awsEnvironmentsStore.selectedEnvironment;
+      if (selectedEnv) {
+        selectedEnvironment.value = selectedEnv.name;
+      }
     }
   } catch (error) {
     console.error('获取环境列表失败:', error);
     ElMessage.error('获取环境列表失败: ' + (error.response?.data?.message || error.message || '网络异常'));
-  } finally {
-    envLoading.value = false;
   }
 };
 
@@ -723,6 +726,10 @@ watch(selectedEnvironment, (newEnv) => {
     tables.value = [];
     queryForm.table = '';
   }
+});
+
+onMounted(() => {
+  fetchEnvironments();
 });
 </script>
 
