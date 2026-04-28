@@ -7,6 +7,7 @@ import AWSUserManage from './components/AWS/SecurityHub/usermange.vue'
 import Route from './components/AWS/Route/Route.vue'
 import AthenaQuery from './components/AWS/Athena/AthenaQuery.vue'
 import EnvironmentManagement from './components/AWS/EnvironmentManagement.vue'
+import DevOpsAgentIncident from './components/AWS/DevOpsAgentIncident.vue'
 import KnowledgeBase from './components/AI/knowledge_base.vue'
 import LLMWeb from './components/AI/LLMWeb.vue'
 import WorkflowView from './components/Workflow/WorkflowView.vue'
@@ -22,6 +23,7 @@ const routes = {
   '/aws/Route': Route,
   '/aws/athenaQuery': AthenaQuery,
   '/aws/environments': EnvironmentManagement,
+  '/aws/devops-incident': DevOpsAgentIncident,
   '/ai/KnowledgeBase': KnowledgeBase,
   '/ai/LLMWeb': LLMWeb,
   '/workflow': WorkflowView,
@@ -133,6 +135,10 @@ export default {
             <el-icon><Setting /></el-icon>
             <template #title>环境凭证管理</template>
           </el-menu-item>
+          <el-menu-item index="/aws/devops-incident">
+            <el-icon><Warning /></el-icon>
+            <template #title>DevOps Agent 事件调查</template>
+          </el-menu-item>
           <el-menu-item index="/aws/userManage">
             <el-icon><User /></el-icon>
             <template #title>超时未登录用户</template>
@@ -238,12 +244,14 @@ import {
   UserFilled,
   Share,
   DataLine,
-  Setting
+  Setting,
+  Warning
 } from '@element-plus/icons-vue'
 
 const getBreadcrumbName = (path) => {
   const nameMap = {
     '/aws/environments': '环境凭证管理',
+    '/aws/devops-incident': 'DevOps Agent 事件调查',
     '/aws/userManage': '超时未登录用户',
     '/aws/logDownLoad': 'Cloudwatch日志下载',
     '/aws/ecsInfo': 'ECS 信息查看',
