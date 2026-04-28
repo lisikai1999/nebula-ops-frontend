@@ -58,38 +58,24 @@
       
       <div class="progress-section">
         <el-steps :active="currentStep" align-center finish-status="success">
-          <el-step title="事件检测" :description="stepDetails[0].status">
+          <el-step title="调查" :description="stepDetails[0].status">
             <template #icon>
               <div class="step-icon" :class="stepDetails[0].iconClass">
                 <el-icon><component :is="stepDetails[0].icon" /></el-icon>
               </div>
             </template>
           </el-step>
-          <el-step title="信息收集" :description="stepDetails[1].status">
+          <el-step title="根因分析" :description="stepDetails[1].status">
             <template #icon>
               <div class="step-icon" :class="stepDetails[1].iconClass">
                 <el-icon><component :is="stepDetails[1].icon" /></el-icon>
               </div>
             </template>
           </el-step>
-          <el-step title="根因分析" :description="stepDetails[2].status">
+          <el-step title="修复建议" :description="stepDetails[2].status">
             <template #icon>
               <div class="step-icon" :class="stepDetails[2].iconClass">
                 <el-icon><component :is="stepDetails[2].icon" /></el-icon>
-              </div>
-            </template>
-          </el-step>
-          <el-step title="修复建议" :description="stepDetails[3].status">
-            <template #icon>
-              <div class="step-icon" :class="stepDetails[3].iconClass">
-                <el-icon><component :is="stepDetails[3].icon" /></el-icon>
-              </div>
-            </template>
-          </el-step>
-          <el-step title="验证修复" :description="stepDetails[4].status">
-            <template #icon>
-              <div class="step-icon" :class="stepDetails[4].iconClass">
-                <el-icon><component :is="stepDetails[4].icon" /></el-icon>
               </div>
             </template>
           </el-step>
@@ -520,21 +506,20 @@ const severityTag = computed(() => {
   return map[incidentData.value.severity] || map.low
 })
 
-const currentStep = ref(3)
-const progressPercentage = computed(() => Math.min(100, currentStep.value * 20))
-const progressElStatus = computed(() => currentStep.value >= 5 ? 'success' : '')
+const currentStep = ref(1)
+const progressPercentage = computed(() => Math.min(100, currentStep.value * 33.33))
+const progressElStatus = computed(() => currentStep.value >= 3 ? 'success' : '')
 
 const progressStatus = computed(() => {
-  if (currentStep.value >= 5) return { type: 'success', text: '已完成' }
-  if (currentStep.value >= 3) return { type: 'primary', text: '分析中' }
-  return { type: 'info', text: '进行中' }
+  if (currentStep.value >= 3) return { type: 'success', text: '已完成' }
+  if (currentStep.value >= 2) return { type: 'primary', text: '修复中' }
+  if (currentStep.value >= 1) return { type: 'primary', text: '分析中' }
+  return { type: 'info', text: '调查中' }
 })
 
 const stepDetails = ref([
   { status: '已完成', icon: 'CircleCheck', iconClass: 'completed' },
-  { status: '已完成', icon: 'CircleCheck', iconClass: 'completed' },
   { status: '进行中', icon: 'Loading', iconClass: 'processing' },
-  { status: '待处理', icon: 'Timer', iconClass: 'pending' },
   { status: '待处理', icon: 'Timer', iconClass: 'pending' }
 ])
 
