@@ -42,8 +42,12 @@ export default {
     }
   },
   computed: {
+    getRoutePath() {
+      const path = this.currentPath.slice(1) || '/'
+      return path.split('?')[0]
+    },
     currentView() {
-      return routes[this.currentPath.slice(1) || '/'] || NotFound
+      return routes[this.getRoutePath] || NotFound
     },
     isLoginPage() {
       return this.currentPath === '#/Login'
@@ -60,7 +64,8 @@ export default {
   },
   watch: {
     currentPath(newPath) {
-      this.activeMenu = newPath.slice(1)
+      const path = newPath.slice(1) || '/'
+      this.activeMenu = path.split('?')[0]
       this.checkAuthAndRedirect()
     }
   },
@@ -93,7 +98,8 @@ export default {
   mounted() {
     this.authStore.init()
     this.checkAuthAndRedirect()
-    this.activeMenu = this.currentPath.slice(1) || '/aws/logIntake'
+    const path = this.currentPath.slice(1) || '/aws/logIntake'
+    this.activeMenu = path.split('?')[0]
     window.addEventListener('hashchange', () => {
       this.currentPath = window.location.hash
     })
