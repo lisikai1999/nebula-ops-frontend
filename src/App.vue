@@ -8,6 +8,7 @@ import Route from './components/AWS/Route/Route.vue'
 import AthenaQuery from './components/AWS/Athena/AthenaQuery.vue'
 import EnvironmentManagement from './components/AWS/EnvironmentManagement.vue'
 import DevOpsAgentIncident from './components/AWS/DevOpsAgentIncident.vue'
+import DevOpsAgentIncidentLaunch from './components/AWS/DevOpsAgentIncidentLaunch.vue'
 import KnowledgeBase from './components/AI/knowledge_base.vue'
 import LLMWeb from './components/AI/LLMWeb.vue'
 import WorkflowView from './components/Workflow/WorkflowView.vue'
@@ -24,6 +25,7 @@ const routes = {
   '/aws/athenaQuery': AthenaQuery,
   '/aws/environments': EnvironmentManagement,
   '/aws/devops-incident': DevOpsAgentIncident,
+  '/aws/devops-incident-launch': DevOpsAgentIncidentLaunch,
   '/ai/KnowledgeBase': KnowledgeBase,
   '/ai/LLMWeb': LLMWeb,
   '/workflow': WorkflowView,
@@ -135,9 +137,13 @@ export default {
             <el-icon><Setting /></el-icon>
             <template #title>环境凭证管理</template>
           </el-menu-item>
+          <el-menu-item index="/aws/devops-incident-launch">
+            <el-icon><Plus /></el-icon>
+            <template #title>发起事件调查</template>
+          </el-menu-item>
           <el-menu-item index="/aws/devops-incident">
             <el-icon><Warning /></el-icon>
-            <template #title>DevOps Agent 事件调查</template>
+            <template #title>事件调查详情</template>
           </el-menu-item>
           <el-menu-item index="/aws/userManage">
             <el-icon><User /></el-icon>
@@ -245,13 +251,15 @@ import {
   Share,
   DataLine,
   Setting,
-  Warning
+  Warning,
+  Plus
 } from '@element-plus/icons-vue'
 
 const getBreadcrumbName = (path) => {
   const nameMap = {
     '/aws/environments': '环境凭证管理',
-    '/aws/devops-incident': 'DevOps Agent 事件调查',
+    '/aws/devops-incident-launch': '发起事件调查',
+    '/aws/devops-incident': '事件调查详情',
     '/aws/userManage': '超时未登录用户',
     '/aws/logDownLoad': 'Cloudwatch日志下载',
     '/aws/ecsInfo': 'ECS 信息查看',
