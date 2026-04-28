@@ -8,11 +8,19 @@
         </el-tag>
       </div>
       <div class="header-right">
+        <el-button size="small" @click="goToList">
+          <el-icon><List /></el-icon>
+          返回列表
+        </el-button>
+        <el-button size="small" type="primary" @click="goToLaunch">
+          <el-icon><Plus /></el-icon>
+          发起新调查
+        </el-button>
         <el-button size="small" @click="handleRefresh">
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
-        <el-button size="small" type="primary" @click="handleExport">
+        <el-button size="small" type="success" @click="handleExport">
           <el-icon><Download /></el-icon>
           导出报告
         </el-button>
@@ -479,7 +487,9 @@ import {
   Search,
   DataAnalysis,
   Tools,
-  View
+  View,
+  List,
+  Plus
 } from '@element-plus/icons-vue'
 
 const incidentData = ref({
@@ -816,6 +826,14 @@ const chatMessages = ref([
 
 const toggleTimelineView = () => {
   timelineView.value = timelineView.value === 'full' ? 'key' : 'full'
+}
+
+const goToList = () => {
+  window.location.hash = '#/aws/devops-incident-list'
+}
+
+const goToLaunch = () => {
+  window.location.hash = '#/aws/devops-incident-launch'
 }
 
 const handleRefresh = () => {

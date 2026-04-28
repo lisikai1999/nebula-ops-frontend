@@ -131,54 +131,6 @@
               </div>
             </el-form-item>
 
-            <el-divider content-position="left">高级选项</el-divider>
-
-            <el-form-item label="调查范围" prop="scope">
-              <el-checkbox-group v-model="formData.scope">
-                <el-checkbox label="ecs">
-                  <span class="scope-option">
-                    <el-icon><DataAnalysis /></el-icon>
-                    ECS 服务
-                  </span>
-                </el-checkbox>
-                <el-checkbox label="cloudwatch">
-                  <span class="scope-option">
-                    <el-icon><Document /></el-icon>
-                    CloudWatch 日志
-                  </span>
-                </el-checkbox>
-                <el-checkbox label="rds">
-                  <span class="scope-option">
-                    <el-icon><Connection /></el-icon>
-                    RDS 数据库
-                  </span>
-                </el-checkbox>
-                <el-checkbox label="vpc">
-                  <span class="scope-option">
-                    <el-icon><Share /></el-icon>
-                    VPC 网络
-                  </span>
-                </el-checkbox>
-                <el-checkbox label="lambda">
-                  <span class="scope-option">
-                    <el-icon><Lightning /></el-icon>
-                    Lambda 函数
-                  </span>
-                </el-checkbox>
-                <el-checkbox label="s3">
-                  <span class="scope-option">
-                    <el-icon><Folder /></el-icon>
-                    S3 存储
-                  </span>
-                </el-checkbox>
-              </el-checkbox-group>
-              <div class="form-tip">
-                <el-text type="info" size="small">
-                  选择 DevOps Agent 需要检查的服务范围，不选则默认检查所有相关服务
-                </el-text>
-              </div>
-            </el-form-item>
-
             <el-form-item>
               <div class="form-actions">
                 <el-button size="large" @click="handleReset">
@@ -292,15 +244,9 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Warning,
-  Document,
   CircleCloseFilled,
   WarningFilled,
   InfoFilled,
-  DataAnalysis,
-  Connection,
-  Share,
-  Lightning,
-  Folder,
   RefreshRight,
   Promotion,
   Search,
@@ -324,8 +270,7 @@ const formData = reactive({
   title: '',
   severity: 'high',
   background: '',
-  description: '',
-  scope: ['ecs', 'cloudwatch', 'rds']
+  description: ''
 })
 
 const formRules = {
@@ -395,7 +340,6 @@ const loadEnvironments = async () => {
 const handleReset = () => {
   formRef.value?.resetFields()
   formData.severity = 'high'
-  formData.scope = ['ecs', 'cloudwatch', 'rds']
 }
 
 const handleSubmit = async () => {
@@ -425,7 +369,6 @@ const handleSubmit = async () => {
           severity: formData.severity,
           background: formData.background,
           description: formData.description,
-          scope: formData.scope,
           createdAt: new Date().toISOString()
         }
 
@@ -543,12 +486,6 @@ onMounted(() => {
 
 .severity-label.low {
   color: #909399;
-}
-
-.scope-option {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .form-actions {
