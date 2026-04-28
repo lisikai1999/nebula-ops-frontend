@@ -246,7 +246,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Warning,
@@ -264,13 +264,16 @@ import {
   ArrowRight
 } from '@element-plus/icons-vue'
 import { useAwsEnvironmentsStore } from '@/stores/aws-environments'
+import { useDevOpsIncidentStore } from '@/stores/devops-incident-store'
 
 const awsEnvironmentsStore = useAwsEnvironmentsStore()
+const devOpsIncidentStore = useDevOpsIncidentStore()
 
 const formRef = ref(null)
 const isLoadingEnvironments = computed(() => awsEnvironmentsStore.isLoading)
 const environmentOptions = computed(() => awsEnvironmentsStore.environmentOptions)
-const isSubmitting = ref(false)
+const isSubmitting = computed(() => devOpsIncidentStore.isSubmitting)
+const isLoadingRecent = ref(false)
 
 const formData = reactive({
   environmentId: null,
@@ -298,22 +301,7 @@ const formRules = {
   ]
 }
 
-const recentInvestigations = ref([
-  {
-    id: 'INC-2026-0428-001',
-    title: '生产环境 ECS 服务异常',
-    severity: 'critical',
-    time: '2小时前',
-    status: 'completed'
-  },
-  {
-    id: 'INC-2026-0427-003',
-    title: '测试环境数据库连接超时',
-    severity: 'medium',
-    time: '1天前',
-    status: 'completed'
-  }
-])
+const recentInvestigations = ref([])
 
 const goToList = () => {
   window.location.hash = '#/aws/devops-incident-list'
@@ -348,6 +336,41 @@ const loadEnvironments = async () => {
   }
 }
 
+const loadRecentInvestigations = async () => {
+  isLoadingRecent.value = true
+  try {
+    const investigations = await devOpsIncidentStore.fetchInvestigations({ pageSize: 5 })
+    recentInvestigations.value = investigations.slice(0, 5).map(inv => ({
+      id: inv.id || inv.incidentId,
+      incidentId: inv.incidentId,
+      title: inv.title,
+      severity: inv.severity,
+      time: formatRelativeTime(inv.createdAt),
+      status: inv.status
+    }))
+  } catch (error) {
+    console.error('加载最近调查失败:', error)
+  } finally {
+    isLoadingRecent.value = false
+  }
+}
+
+const formatRelativeTime = (dateStr) => {
+  if (!dateStr) return '-'
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now - date
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  
+  if (diffMins < 1) return '刚刚'
+  if (diffMins < 60) return `${diffMins}分钟前`
+  if (diffHours < 24) return `${diffHours}小时前`
+  if (diffDays < 7) return `${diffDays}天前`
+  return dateStr.slice(0, 10)
+}
+
 const handleReset = () => {
   formRef.value?.resetFields()
   formData.severity = 'high'
@@ -368,47 +391,47 @@ const handleSubmit = async () => {
             type: 'warning'
           }
         )
-
-        isSubmitting.value = true
         
         const selectedEnv = awsEnvironmentsStore.getEnvironmentById(formData.environmentId)
         
         const investigationData = {
-          environmentId: formData.environmentId,
-          environmentName: selectedEnv?.name || '',
+          environment_id: formData.environmentId,
+          environment_name: selectedEnv?.name || '',
           title: formData.title,
           severity: formData.severity,
           background: formData.background,
-          description: formData.description,
-          createdAt: new Date().toISOString()
+          description: formData.description
         }
 
-        console.log('发起事件调查:', investigationData)
+        const result = await devOpsIncidentStore.createInvestigation(investigationData)
         
         ElMessage.success('事件调查已发起，正在跳转到调查详情页...')
         
         setTimeout(() => {
-          window.location.hash = '#/aws/devops-incident'
+          const investigationId = result.id || result.incidentId
+          window.location.hash = `#/aws/devops-incident?id=${investigationId}`
         }, 800)
         
       } catch (error) {
         if (error !== 'cancel') {
           console.error('发起调查失败:', error)
-          ElMessage.error('发起调查失败，请稍后重试')
         }
-      } finally {
-        isSubmitting.value = false
       }
     }
   })
 }
 
 const goToInvestigation = (item) => {
-  window.location.hash = '#/aws/devops-incident'
+  window.location.hash = `#/aws/devops-incident?id=${item.id}`
 }
 
 onMounted(() => {
   loadEnvironments()
+  loadRecentInvestigations()
+})
+
+onUnmounted(() => {
+  devOpsIncidentStore.clearCurrentInvestigation()
 })
 </script>
 

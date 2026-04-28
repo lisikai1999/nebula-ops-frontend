@@ -149,8 +149,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   List,
   Plus,
@@ -161,10 +161,12 @@ import {
   Download
 } from '@element-plus/icons-vue'
 import { useAwsEnvironmentsStore } from '@/stores/aws-environments'
+import { useDevOpsIncidentStore } from '@/stores/devops-incident-store'
 
 const awsEnvironmentsStore = useAwsEnvironmentsStore()
+const devOpsIncidentStore = useDevOpsIncidentStore()
 
-const isLoading = ref(false)
+const isLoading = computed(() => devOpsIncidentStore.isLoading)
 const environmentOptions = computed(() => awsEnvironmentsStore.environmentOptions)
 
 const filterForm = reactive({
@@ -180,121 +182,26 @@ const pagination = reactive({
   total: 0
 })
 
-const mockInvestigations = ref([
-  {
-    id: '1',
-    incidentId: 'INC-2026-0428-001',
-    title: '生产环境 ECS 服务异常',
-    environmentName: 'China Prod',
-    environmentId: 'env-001',
-    severity: 'critical',
-    status: 'completed',
-    createdAt: '2026-04-28 08:32:15',
-    description: '生产环境 ECS 服务健康检查失败，3个实例无法正常提供服务'
-  },
-  {
-    id: '2',
-    incidentId: 'INC-2026-0427-003',
-    title: '测试环境数据库连接超时',
-    environmentName: 'Singapore Dev',
-    environmentId: 'env-002',
-    severity: 'medium',
-    status: 'completed',
-    createdAt: '2026-04-27 14:20:30',
-    description: '测试环境数据库连接池耗尽，应用无法获取数据库连接'
-  },
-  {
-    id: '3',
-    incidentId: 'INC-2026-0426-002',
-    title: 'Lambda 函数执行超时',
-    environmentName: 'US East Prod',
-    environmentId: 'env-003',
-    severity: 'high',
-    status: 'investigating',
-    createdAt: '2026-04-26 11:45:00',
-    description: '数据处理 Lambda 函数执行超时，影响数据同步流程'
-  },
-  {
-    id: '4',
-    incidentId: 'INC-2026-0425-001',
-    title: 'S3 存储桶权限问题',
-    environmentName: 'China Prod',
-    environmentId: 'env-001',
-    severity: 'low',
-    status: 'closed',
-    createdAt: '2026-04-25 09:10:20',
-    description: '新创建的 S3 存储桶权限配置不正确，导致应用无法访问'
-  }
-])
+const investigations = computed(() => devOpsIncidentStore.investigations)
 
 const filteredInvestigations = computed(() => {
-  let result = [...mockInvestigations.value]
-  
-  if (filterForm.status) {
-    result = result.filter(item => item.status === filterForm.status)
-  }
-  
-  if (filterForm.severity) {
-    result = result.filter(item => item.severity === filterForm.severity)
-  }
-  
-  if (filterForm.environmentId) {
-    result = result.filter(item => item.environmentId === filterForm.environmentId)
-  }
-  
-  if (filterForm.keyword) {
-    const keyword = filterForm.keyword.toLowerCase()
-    result = result.filter(item => 
-      item.title.toLowerCase().includes(keyword) ||
-      item.description.toLowerCase().includes(keyword) ||
-      item.incidentId.toLowerCase().includes(keyword)
-    )
-  }
-  
-  pagination.total = result.length
-  
-  const start = (pagination.currentPage - 1) * pagination.pageSize
-  const end = start + pagination.pageSize
-  
-  return result.slice(start, end)
+  return investigations.value
 })
 
 const getSeverityTag = (severity) => {
-  const map = {
-    critical: 'danger',
-    high: 'danger',
-    medium: 'warning',
-    low: 'info'
-  }
-  return map[severity] || 'info'
+  return devOpsIncidentStore.getSeverityTag(severity)
 }
 
 const getSeverityText = (severity) => {
-  const map = {
-    critical: '严重',
-    high: '高',
-    medium: '中',
-    low: '低'
-  }
-  return map[severity] || '未知'
+  return devOpsIncidentStore.getSeverityText(severity)
 }
 
 const getStatusTag = (status) => {
-  const map = {
-    investigating: 'primary',
-    completed: 'success',
-    closed: 'info'
-  }
-  return map[status] || 'info'
+  return devOpsIncidentStore.getStatusTag(status)
 }
 
 const getStatusText = (status) => {
-  const map = {
-    investigating: '调查中',
-    completed: '已完成',
-    closed: '已关闭'
-  }
-  return map[status] || '未知'
+  return devOpsIncidentStore.getStatusText(status)
 }
 
 const getRowClassName = ({ row }) => {
@@ -309,21 +216,37 @@ const formatDate = (dateStr) => {
   return dateStr
 }
 
-const loadInvestigations = async () => {
-  isLoading.value = true
+const fetchData = async () => {
   try {
-    await awsEnvironmentsStore.fetchEnvironments()
-    await new Promise(resolve => setTimeout(resolve, 500))
+    const params = {
+      page: pagination.currentPage,
+      pageSize: pagination.pageSize
+    }
+    
+    if (filterForm.status) params.status = filterForm.status
+    if (filterForm.severity) params.severity = filterForm.severity
+    if (filterForm.environmentId) params.environmentId = filterForm.environmentId
+    if (filterForm.keyword) params.keyword = filterForm.keyword
+    
+    await devOpsIncidentStore.fetchInvestigations(params)
+    pagination.total = devOpsIncidentStore.investigationCount
   } catch (error) {
     console.error('加载调查列表失败:', error)
-    ElMessage.error('加载失败，请稍后重试')
-  } finally {
-    isLoading.value = false
+  }
+}
+
+const loadInvestigations = async () => {
+  try {
+    await awsEnvironmentsStore.fetchEnvironments()
+    await fetchData()
+  } catch (error) {
+    console.error('加载调查列表失败:', error)
   }
 }
 
 const handleSearch = () => {
   pagination.currentPage = 1
+  fetchData()
 }
 
 const handleResetFilter = () => {
@@ -332,6 +255,7 @@ const handleResetFilter = () => {
   filterForm.environmentId = ''
   filterForm.keyword = ''
   pagination.currentPage = 1
+  fetchData()
 }
 
 const handleRowClick = (row) => {
@@ -339,11 +263,17 @@ const handleRowClick = (row) => {
 }
 
 const viewDetail = (row) => {
-  window.location.hash = `#/aws/devops-incident?id=${row.id}`
+  const investigationId = row.id || row.incidentId
+  window.location.hash = `#/aws/devops-incident?id=${investigationId}`
 }
 
-const handleExport = (row) => {
-  ElMessage.success(`正在导出调查记录: ${row.incidentId}`)
+const handleExport = async (row) => {
+  try {
+    const investigationId = row.id || row.incidentId
+    await devOpsIncidentStore.exportInvestigation(investigationId)
+  } catch (error) {
+    console.error('导出失败:', error)
+  }
 }
 
 const goToLaunch = () => {
@@ -352,14 +282,20 @@ const goToLaunch = () => {
 
 const handleSizeChange = (val) => {
   pagination.pageSize = val
+  fetchData()
 }
 
 const handleCurrentChange = (val) => {
   pagination.currentPage = val
+  fetchData()
 }
 
 onMounted(() => {
   loadInvestigations()
+})
+
+onUnmounted(() => {
+  devOpsIncidentStore.clearCurrentInvestigation()
 })
 </script>
 

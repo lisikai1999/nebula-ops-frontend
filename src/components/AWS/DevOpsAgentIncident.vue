@@ -466,8 +466,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh,
   Download,
@@ -491,33 +491,72 @@ import {
   List,
   Plus
 } from '@element-plus/icons-vue'
+import { useDevOpsIncidentStore } from '@/stores/devops-incident-store'
 
-const incidentData = ref({
-  incidentId: 'INC-2026-0428-001',
-  occurredAt: '2026-04-28 08:32:15',
-  affectedService: 'AWS ECS / Production Cluster',
-  severity: 'critical'
-})
+const devOpsIncidentStore = useDevOpsIncidentStore()
 
-const incidentStatus = computed(() => {
+const isLoading = computed(() => devOpsIncidentStore.isLoading)
+const currentInvestigation = computed(() => devOpsIncidentStore.currentInvestigation)
+const isPolling = computed(() => devOpsIncidentStore.isPolling)
+
+const getInvestigationIdFromUrl = () => {
+  const hash = window.location.hash
+  const match = hash.match(/id=([^&]+)/)
+  return match ? match[1] : null
+}
+
+const investigationId = ref(getInvestigationIdFromUrl())
+
+const incidentData = computed(() => {
+  if (!currentInvestigation.value) {
+    return {
+      incidentId: '-',
+      occurredAt: '-',
+      affectedService: '-',
+      severity: 'low'
+    }
+  }
   return {
-    type: 'warning',
-    text: '调查中'
+    incidentId: currentInvestigation.value.incidentId || currentInvestigation.value.id || '-',
+    occurredAt: currentInvestigation.value.occurredAt || currentInvestigation.value.created_at || '-',
+    affectedService: currentInvestigation.value.affectedService || currentInvestigation.value.affected_service || '-',
+    severity: currentInvestigation.value.severity || 'low'
   }
 })
 
+const incidentStatus = computed(() => {
+  const status = currentInvestigation.value?.status || 'investigating'
+  const statusMap = {
+    investigating: { type: 'warning', text: '调查中' },
+    completed: { type: 'success', text: '已完成' },
+    closed: { type: 'info', text: '已关闭' },
+    cancelled: { type: 'info', text: '已取消' },
+    failed: { type: 'danger', text: '失败' }
+  }
+  return statusMap[status] || statusMap.investigating
+})
+
 const severityTag = computed(() => {
+  const severity = incidentData.value.severity
   const map = {
     critical: { type: 'danger', text: '严重' },
     high: { type: 'danger', text: '高' },
     medium: { type: 'warning', text: '中' },
     low: { type: 'info', text: '低' }
   }
-  return map[incidentData.value.severity] || map.low
+  return map[severity] || map.low
 })
 
-const currentStep = ref(1)
-const progressPercentage = computed(() => Math.min(100, currentStep.value * 33.33))
+const currentStep = computed(() => {
+  const progress = currentInvestigation.value?.progress || {}
+  return progress.currentStep || 0
+})
+
+const progressPercentage = computed(() => {
+  const progress = currentInvestigation.value?.progress || {}
+  return progress.percentage || Math.min(100, currentStep.value * 33.33)
+})
+
 const progressElStatus = computed(() => currentStep.value >= 3 ? 'success' : '')
 
 const progressStatus = computed(() => {
@@ -527,136 +566,66 @@ const progressStatus = computed(() => {
   return { type: 'info', text: '调查中' }
 })
 
-const stepDetails = ref([
-  { status: '已完成', icon: 'CircleCheck', iconClass: 'completed' },
-  { status: '进行中', icon: 'Loading', iconClass: 'processing' },
-  { status: '待处理', icon: 'Timer', iconClass: 'pending' }
-])
+const stepDetails = computed(() => {
+  const steps = currentInvestigation.value?.progress?.steps || []
+  if (steps.length > 0) {
+    return steps.map((step, index) => {
+      let iconClass = 'pending'
+      let icon = 'Timer'
+      let status = '待处理'
+      
+      if (index < currentStep.value) {
+        iconClass = 'completed'
+        icon = 'CircleCheck'
+        status = '已完成'
+      } else if (index === currentStep.value) {
+        iconClass = 'processing'
+        icon = 'Loading'
+        status = '进行中'
+      }
+      
+      return {
+        status: step.status || status,
+        icon: step.icon || icon,
+        iconClass: step.iconClass || iconClass
+      }
+    })
+  }
+  
+  return [
+    { status: currentStep.value >= 1 ? '已完成' : (currentStep.value === 0 ? '进行中' : '待处理'), 
+      icon: currentStep.value >= 1 ? 'CircleCheck' : (currentStep.value === 0 ? 'Loading' : 'Timer'), 
+      iconClass: currentStep.value >= 1 ? 'completed' : (currentStep.value === 0 ? 'processing' : 'pending') },
+    { status: currentStep.value >= 2 ? '已完成' : (currentStep.value === 1 ? '进行中' : '待处理'), 
+      icon: currentStep.value >= 2 ? 'CircleCheck' : (currentStep.value === 1 ? 'Loading' : 'Timer'), 
+      iconClass: currentStep.value >= 2 ? 'completed' : (currentStep.value === 1 ? 'processing' : 'pending') },
+    { status: currentStep.value >= 3 ? '已完成' : (currentStep.value === 2 ? '进行中' : '待处理'), 
+      icon: currentStep.value >= 3 ? 'CircleCheck' : (currentStep.value === 2 ? 'Loading' : 'Timer'), 
+      iconClass: currentStep.value >= 3 ? 'completed' : (currentStep.value === 2 ? 'processing' : 'pending') }
+  ]
+})
 
 const timelineView = ref('full')
 
-const fullTimeline = ref([
-  {
-    id: 1,
-    timestamp: '08:32:15',
-    type: 'danger',
-    icon: 'Warning',
-    title: '事件触发 - 健康检查失败',
-    description: 'AWS CloudWatch 检测到生产环境 ECS 服务的 3 个目标组健康检查连续失败，触发告警。',
-    highlight: true,
-    details: [
-      '目标组: arn:aws:elasticloadbalancing:cn-north-1:123456789012:targetgroup/prod-api/abc123',
-      '健康检查路径: /health',
-      '失败阈值: 3 次连续失败',
-      '受影响实例: 3 / 5 个实例'
-    ],
-    logs: [
-      '[2026-04-28T08:32:15Z] HEALTH_CHECK_FAILED: Target i-0abc123def456 is unhealthy',
-      '[2026-04-28T08:32:16Z] HEALTH_CHECK_FAILED: Target i-0def789ghi012 is unhealthy',
-      '[2026-04-28T08:32:17Z] HEALTH_CHECK_FAILED: Target i-0ghi345jkl678 is unhealthy'
-    ]
-  },
-  {
-    id: 2,
-    timestamp: '08:32:45',
-    type: 'primary',
-    icon: 'Search',
-    title: '自动信息收集开始',
-    description: 'DevOps Agent 自动启动事件响应流程，开始收集相关诊断信息。',
-    duration: '45s',
-    details: [
-      '收集 ECS 服务状态和任务列表',
-      '拉取最近 15 分钟的 CloudWatch 日志',
-      '检查 VPC 网络连接性',
-      '验证安全组和 NACL 配置'
-    ]
-  },
-  {
-    id: 3,
-    timestamp: '08:33:30',
-    type: 'warning',
-    icon: 'DataAnalysis',
-    title: '初步分析 - 日志异常模式',
-    description: '分析日志发现应用程序抛出大量数据库连接超时异常，连接池耗尽。',
-    highlight: true,
-    duration: '1min 30s',
-    details: [
-      '错误类型: SQLTransientConnectionException',
-      '错误消息: HikariPool-1 - Connection is not available, request timed out after 30000ms',
-      '连接池配置: 最大连接数 50',
-      '当前活跃连接: 50 / 50 (100%)'
-    ],
-    logs: [
-      'Caused by: java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30000ms.',
-      'at com.zaxxer.hikari.pool.HikariPool.createTimeoutException(HikariPool.java:696)',
-      'at com.zaxxer.hikari.pool.HikariPool.getConnection(HikariPool.java:197)'
-    ],
-    suggestions: [
-      '检查数据库连接池配置是否合理',
-      '验证数据库服务器负载状态',
-      '查看是否存在慢查询阻塞连接'
-    ]
-  },
-  {
-    id: 4,
-    timestamp: '08:35:00',
-    type: 'primary',
-    icon: 'Search',
-    title: '深度诊断 - 数据库层面',
-    description: 'Agent 转向数据库层面诊断，发现 RDS 实例存在异常活跃连接。',
-    duration: '1min 15s',
-    details: [
-      'RDS 实例: prod-db-mysql-01',
-      'CPU 使用率: 98% (异常)',
-      '活跃连接数: 256',
-      '慢查询数: 142 (最近 5 分钟)',
-      '锁等待时间: 平均 12s'
-    ]
-  },
-  {
-    id: 5,
-    timestamp: '08:36:15',
-    type: 'danger',
-    icon: 'Warning',
-    title: '根因确认 - 慢查询锁定',
-    description: '确认根因为某条未优化的 SQL 查询导致全表扫描，锁表后引发连接池雪崩。',
-    highlight: true,
-    duration: '30s',
-    details: [
-      '问题 SQL: SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC',
-      '表大小: 500 万行',
-      '缺少索引: status 列和 created_at 列无联合索引',
-      '执行时间: 每次查询约 45 秒',
-      '锁影响: 阻塞了 200+ 个后续写入操作'
-    ],
-    logs: [
-      'EXPLAIN SELECT * FROM orders WHERE status = \'PENDING\' ORDER BY created_at DESC',
-      '-> Filter: (orders.status = \'PENDING\')  (cost=1e6 rows=5e6)',
-      '-> Sort: orders.created_at DESC  (cost=1e6 rows=5e6)',
-      '-> Table scan on orders  (cost=1e6 rows=5e6)'
-    ],
-    suggestions: [
-      '立即创建联合索引: idx_status_created_at(status, created_at)',
-      '终止当前阻塞的慢查询进程',
-      '考虑增加连接池大小作为临时缓解'
-    ]
-  },
-  {
-    id: 6,
-    timestamp: '08:37:00',
-    type: 'success',
-    icon: 'CircleCheck',
-    title: '修复方案生成完成',
-    description: 'DevOps Agent 已完成根因分析，并生成了完整的修复建议和执行计划。',
-    duration: '45s',
-    details: [
-      '已分析影响范围和风险等级',
-      '已生成立即执行的修复命令',
-      '已制定长期优化建议',
-      '已准备验证步骤'
-    ]
+const fullTimeline = computed(() => {
+  const timeline = currentInvestigation.value?.timeline || []
+  if (timeline.length > 0) {
+    return timeline.map((item, index) => ({
+      id: item.id || index + 1,
+      timestamp: item.timestamp || item.time || '-',
+      type: item.type || 'primary',
+      icon: item.icon || 'Search',
+      title: item.title || '-',
+      description: item.description || '',
+      highlight: item.highlight || false,
+      duration: item.duration,
+      details: item.details || [],
+      logs: item.logs || [],
+      suggestions: item.suggestions || []
+    }))
   }
-])
+  return []
+})
 
 const filteredTimeline = computed(() => {
   if (timelineView.value === 'full') {
@@ -665,127 +634,40 @@ const filteredTimeline = computed(() => {
   return fullTimeline.value.filter(item => item.highlight)
 })
 
-const rootCauseData = ref({
-  mainCause: '未优化的 SQL 查询导致数据库连接池耗尽',
-  description: 'orders 表上的查询缺少联合索引，导致全表扫描和锁表，引发数据库连接池耗尽，最终导致应用服务健康检查失败。',
-  impactChain: [
-    '新代码部署引入未优化的 SQL 查询',
-    '查询执行全表扫描 (500万行)',
-    '查询耗时 45 秒并持有表锁',
-    '后续查询被阻塞，连接池迅速耗尽',
-    '应用无法获取数据库连接，请求超时',
-    '健康检查失败，ECS 开始重启容器',
-    '重启循环导致服务完全不可用'
-  ],
-  contributingFactors: [
-    {
-      type: 'critical',
-      name: '缺失数据库索引',
-      description: 'orders 表的 status 和 created_at 列缺少联合索引，导致查询性能极差。'
-    },
-    {
-      type: 'warning',
-      name: '连接池配置过小',
-      description: 'HikariCP 最大连接数设置为 50，在高并发下容易耗尽。'
-    },
-    {
-      type: 'warning',
-      name: '缺少慢查询告警',
-      description: '未配置慢查询阈值告警，问题在早期阶段未被发现。'
-    },
-    {
-      type: 'warning',
-      name: '部署前性能测试不足',
-      description: '新 SQL 在部署前未经过充分的性能压力测试。'
+const rootCauseData = computed(() => {
+  const rootCause = currentInvestigation.value?.rootCause || currentInvestigation.value?.root_cause
+  if (rootCause) {
+    return {
+      mainCause: rootCause.mainCause || rootCause.main_cause || '-',
+      description: rootCause.description || '-',
+      impactChain: rootCause.impactChain || rootCause.impact_chain || [],
+      contributingFactors: rootCause.contributingFactors || rootCause.contributing_factors || [],
+      evidence: rootCause.evidence || []
     }
-  ],
-  evidence: [
-    { source: 'ECS 日志', evidence: '大量 HikariPool 连接超时异常', relevance: 95 },
-    { source: 'CloudWatch Metrics', evidence: '数据库 CPU 飙升至 98%', relevance: 90 },
-    { source: 'RDS 慢查询日志', evidence: '同一 SQL 执行 142 次，每次 45s+', relevance: 100 },
-    { source: 'RDS 进程列表', evidence: '256 个活跃连接，大部分在等待锁', relevance: 85 },
-    { source: '代码审查', evidence: '最新部署的提交引入了该查询', relevance: 80 }
-  ]
+  }
+  return {
+    mainCause: '-',
+    description: '根因分析进行中...',
+    impactChain: [],
+    contributingFactors: [],
+    evidence: []
+  }
 })
 
 const activeFixTab = ref('immediate')
 
-const fixSuggestions = ref({
-  immediate: [
-    {
-      title: '创建缺失的数据库索引',
-      description: '为 orders 表的 status 和 created_at 列创建联合索引，这将把查询时间从 45 秒降低到毫秒级。',
-      priority: 'high',
-      completed: false,
-      commands: [
-        {
-          label: '创建联合索引',
-          command: 'CREATE INDEX idx_status_created_at ON orders(status, created_at);'
-        },
-        {
-          label: '验证索引创建',
-          command: 'SHOW INDEX FROM orders WHERE Key_name = \'idx_status_created_at\';'
-        }
-      ],
-      verification: '执行 EXPLAIN 验证查询是否使用新索引，确认查询时间下降到合理范围。'
-    },
-    {
-      title: '终止阻塞的慢查询进程',
-      description: '立即终止当前正在执行的慢查询，释放数据库连接和锁资源。',
-      priority: 'high',
-      completed: false,
-      commands: [
-        {
-          label: '查看阻塞进程',
-          command: 'SELECT * FROM information_schema.processlist WHERE Command = \'Query\' AND Time > 10;'
-        },
-        {
-          label: '终止慢查询进程 (替换 ID)',
-          command: 'KILL QUERY <process_id>;'
-        }
-      ],
-      verification: '检查数据库活跃连接数是否下降，应用服务是否开始恢复。'
-    },
-    {
-      title: '临时增加连接池大小',
-      description: '作为短期缓解措施，增加应用的数据库连接池大小，防止再次耗尽。',
-      priority: 'medium',
-      completed: false,
-      commands: [
-        {
-          label: '更新 ECS 任务定义环境变量',
-          command: 'aws ecs register-task-definition --family prod-api --container-definitions \'[{"name":"api","environment":[{"name":"SPRING_DATASOURCE_HIKARI_MAXIMUM-POOL-SIZE","value":"100"}]}]\''
-        }
-      ],
-      verification: '部署新版本后，确认 HikariCP 指标显示最大连接数已更新为 100。'
+const fixSuggestions = computed(() => {
+  const suggestions = currentInvestigation.value?.fixSuggestions || currentInvestigation.value?.fix_suggestions
+  if (suggestions) {
+    return {
+      immediate: suggestions.immediate || [],
+      longterm: suggestions.longterm || []
     }
-  ],
-  longterm: [
-    {
-      title: '优化数据库连接池配置',
-      description: '根据数据库规格和业务需求，重新评估并优化连接池配置参数，包括最大连接数、最小空闲数、超时时间等。',
-      completed: false,
-      benefits: ['防止连接池雪崩', '提高资源利用率', '更稳定的数据库连接管理']
-    },
-    {
-      title: '建立慢查询监控和告警',
-      description: '配置数据库慢查询日志收集和分析，设置合理的告警阈值，及时发现性能问题。',
-      completed: false,
-      benefits: ['早期发现性能问题', '便于性能优化', '防止类似问题再次发生']
-    },
-    {
-      title: '完善部署前性能测试流程',
-      description: '在 CI/CD 流程中增加性能压力测试环节，确保新代码在大数据量场景下的性能表现符合预期。',
-      completed: false,
-      benefits: ['防止性能退化', '提高代码质量', '降低生产环境风险']
-    },
-    {
-      title: '实现数据库连接池监控仪表盘',
-      description: '建立实时监控仪表盘，展示连接池使用情况、等待队列、活跃连接等关键指标。',
-      completed: false,
-      benefits: ['实时可见性', '快速定位问题', '趋势分析']
-    }
-  ]
+  }
+  return {
+    immediate: [],
+    longterm: []
+  }
 })
 
 const totalSuggestions = computed(() => {
@@ -806,23 +688,13 @@ const chatMessagesRef = ref(null)
 const chatInput = ref('')
 const isSending = ref(false)
 
-const chatMessages = ref([
-  {
-    role: 'assistant',
-    type: 'analysis',
-    time: '08:37:00',
-    title: '事件分析完成',
-    content: '我已完成对此次 ECS 服务中断事件的分析。根因已确认为未优化的 SQL 查询导致数据库连接池耗尽。',
-    details: [
-      '确认了问题 SQL 缺少联合索引',
-      '分析了完整的故障传播链',
-      '识别了 4 个主要促成因素',
-      '生成了 3 个立即执行的修复建议',
-      '制定了 4 个长期优化措施'
-    ],
-    suggestion: '建议优先执行"创建缺失的数据库索引"和"终止阻塞的慢查询进程"这两个高优先级修复。'
+const chatMessages = computed(() => {
+  const messages = currentInvestigation.value?.chatMessages || currentInvestigation.value?.chat_messages || []
+  if (messages.length > 0) {
+    return messages
   }
-])
+  return []
+})
 
 const toggleTimelineView = () => {
   timelineView.value = timelineView.value === 'full' ? 'key' : 'full'
@@ -836,12 +708,22 @@ const goToLaunch = () => {
   window.location.hash = '#/aws/devops-incident-launch'
 }
 
-const handleRefresh = () => {
+const handleRefresh = async () => {
+  if (!investigationId.value) return
   ElMessage.info('正在刷新事件数据...')
+  await devOpsIncidentStore.fetchInvestigationDetail(investigationId.value)
 }
 
-const handleExport = () => {
-  ElMessage.success('事件报告已开始导出')
+const handleExport = async () => {
+  if (!investigationId.value) {
+    ElMessage.warning('无法导出：缺少调查ID')
+    return
+  }
+  try {
+    await devOpsIncidentStore.exportInvestigation(investigationId.value)
+  } catch (error) {
+    console.error('导出失败:', error)
+  }
 }
 
 const handleSuggestionChange = (suggestion) => {
@@ -868,7 +750,6 @@ const sendMessage = async () => {
     time: new Date().toLocaleTimeString()
   }
   
-  chatMessages.value.push(userMessage)
   const userInput = chatInput.value
   chatInput.value = ''
   isSending.value = true
@@ -880,13 +761,10 @@ const sendMessage = async () => {
     type: 'thinking',
     time: new Date().toLocaleTimeString()
   }
-  chatMessages.value.push(thinkingMsg)
   
   await scrollToBottom()
 
   await new Promise(resolve => setTimeout(resolve, 1500))
-
-  chatMessages.value.pop()
 
   const responses = {
     '如何确认根因？': {
@@ -949,11 +827,6 @@ const sendMessage = async () => {
   }
 
   const response = responses[userInput] || defaultResponse
-  chatMessages.value.push({
-    role: 'assistant',
-    ...response,
-    time: new Date().toLocaleTimeString()
-  })
 
   isSending.value = false
   await scrollToBottom()
@@ -971,8 +844,40 @@ const scrollToBottom = async () => {
   }
 }
 
-onMounted(() => {
+const loadInvestigationDetail = async () => {
+  const id = getInvestigationIdFromUrl()
+  if (!id) {
+    ElMessage.warning('未找到调查ID')
+    return
+  }
+  investigationId.value = id
+  await devOpsIncidentStore.fetchInvestigationDetail(id)
+  
+  const status = currentInvestigation.value?.status
+  if (status === 'investigating') {
+    devOpsIncidentStore.startPolling(id, 5000)
+  }
+}
+
+const stopPollingIfNeeded = () => {
+  const status = currentInvestigation.value?.status
+  if (status !== 'investigating' && isPolling.value) {
+    devOpsIncidentStore.stopPolling()
+  }
+}
+
+watch(currentInvestigation, () => {
+  stopPollingIfNeeded()
   scrollToBottom()
+}, { deep: true })
+
+onMounted(() => {
+  loadInvestigationDetail()
+})
+
+onUnmounted(() => {
+  devOpsIncidentStore.stopPolling()
+  devOpsIncidentStore.clearCurrentInvestigation()
 })
 </script>
 
