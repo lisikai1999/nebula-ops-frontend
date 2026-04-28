@@ -7,6 +7,12 @@
           <h1 class="page-title">发起事件调查</h1>
           <el-tag type="primary" effect="plain">DevOps Agent</el-tag>
         </div>
+        <div class="header-right">
+          <el-button @click="goToList">
+            <el-icon><List /></el-icon>
+            查看列表
+          </el-button>
+        </div>
       </div>
     </el-card>
 
@@ -247,6 +253,7 @@ import {
   CircleCloseFilled,
   WarningFilled,
   InfoFilled,
+  List,
   RefreshRight,
   Promotion,
   Search,
@@ -307,6 +314,10 @@ const recentInvestigations = ref([
     status: 'completed'
   }
 ])
+
+const goToList = () => {
+  window.location.hash = '#/aws/devops-incident-list'
+}
 
 const getSeverityTag = (severity) => {
   const map = {
@@ -416,7 +427,20 @@ onMounted(() => {
 
 .page-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-right {
+  display: flex;
   gap: 12px;
 }
 
