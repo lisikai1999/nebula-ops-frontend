@@ -6,7 +6,7 @@
           <el-icon class="header-icon"><Share /></el-icon>
           <h1 class="page-title">AWS 架构图可视化</h1>
           <el-tag v-if="hasResources" type="success" effect="plain">
-            已加载 {{ resourceNodes.length }} 个资源
+            已加载 {{ resourceNodes.length }} 个资源, {{ connections.length }} 条连接
           </el-tag>
         </div>
         <div class="header-right" v-if="hasResources">
@@ -99,23 +99,77 @@
       </div>
     </el-card>
 
+    <el-card class="editor-toolbar-card" shadow="never" v-if="hasResources">
+      <div class="editor-toolbar">
+        <div class="toolbar-section">
+          <span class="toolbar-label">编辑模式:</span>
+          <el-radio-group v-model="editMode" size="small">
+            <el-radio-button value="select">
+              <el-icon><Mouse /></el-icon>
+              选择
+            </el-radio-button>
+            <el-radio-button value="connect">
+              <el-icon><Connection /></el-icon>
+              连线
+            </el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <el-divider direction="vertical" />
+
+        <div class="toolbar-section">
+          <el-button 
+            type="primary" 
+            size="small" 
+            @click="openAddNodeDialog"
+          >
+            <el-icon><Plus /></el-icon>
+            新增资源
+          </el-button>
+          <el-button 
+            type="danger" 
+            size="small" 
+            @click="handleDeleteSelected"
+            :disabled="!selectedNode && !selectedConnection"
+          >
+            <el-icon><Delete /></el-icon>
+            删除选中
+          </el-button>
+        </div>
+
+        <el-divider direction="vertical" />
+
+        <div class="toolbar-section">
+          <el-button-group size="small">
+            <el-button @click="zoomIn">
+              <el-icon><ZoomIn /></el-icon>
+            </el-button>
+            <el-button @click="zoomOut">
+              <el-icon><ZoomOut /></el-icon>
+            </el-button>
+            <el-button @click="resetZoom">
+              <el-icon><FullScreen /></el-icon>
+            </el-button>
+          </el-button-group>
+          <span class="zoom-level">{{ Math.round(scale * 100) }}%</span>
+        </div>
+      </div>
+    </el-card>
+
     <el-card class="diagram-card" shadow="never" v-if="hasResources">
       <template #header>
         <div class="diagram-header">
           <span>架构图</span>
-          <div class="diagram-controls">
-            <el-button-group>
-              <el-button size="small" @click="zoomIn">
-                <el-icon><ZoomIn /></el-icon>
-              </el-button>
-              <el-button size="small" @click="zoomOut">
-                <el-icon><ZoomOut /></el-icon>
-              </el-button>
-              <el-button size="small" @click="resetZoom">
-                <el-icon><FullScreen /></el-icon>
-              </el-button>
-            </el-button-group>
-            <span class="zoom-level">{{ Math.round(scale * 100) }}%</span>
+          <div class="diagram-hints">
+            <el-tag v-if="editMode === 'select'" type="info" size="small">
+              选择模式: 点击节点或连线进行编辑，拖动节点调整位置
+            </el-tag>
+            <el-tag v-if="editMode === 'connect'" type="warning" size="small">
+              连线模式: 先点击起点节点，再点击终点节点创建连接
+            </el-tag>
+            <el-tag v-if="connectingFrom" type="success" size="small">
+              已选择起点: {{ connectingFrom.title }}，请点击终点节点
+            </el-tag>
           </div>
         </div>
       </template>
@@ -146,24 +200,60 @@
               >
                 <polygon points="0 0, 10 3.5, 0 7" fill="#909399" />
               </marker>
+              <marker 
+                id="arrowhead-highlight" 
+                markerWidth="10" 
+                markerHeight="7" 
+                refX="9" 
+                refY="3.5" 
+                orient="auto"
+              >
+                <polygon points="0 0, 10 3.5, 0 7" fill="#409EFF" />
+              </marker>
+              <marker 
+                id="arrowhead-hover" 
+                markerWidth="10" 
+                markerHeight="7" 
+                refX="9" 
+                refY="3.5" 
+                orient="auto"
+              >
+                <polygon points="0 0, 10 3.5, 0 7" fill="#F56C6C" />
+              </marker>
               <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
                 <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.2"/>
               </filter>
             </defs>
 
             <g class="connections">
-              <line 
+              <g 
                 v-for="conn in connections"
                 :key="conn.id"
-                :x1="conn.x1"
-                :y1="conn.y1"
-                :x2="conn.x2"
-                :y2="conn.y2"
-                :stroke="conn.color || '#909399'"
-                :stroke-width="conn.width || 2"
-                marker-end="url(#arrowhead)"
-                :class="{ 'connection-highlight': conn.highlighted }"
-              />
+                @mousedown.stop="onConnectionClick(conn)"
+                class="connection-group"
+              >
+                <line 
+                  :x1="conn.x1"
+                  :y1="conn.y1"
+                  :x2="conn.x2"
+                  :y2="conn.y2"
+                  :stroke="conn.highlighted ? '#409EFF' : (conn.hovered ? '#F56C6C' : (conn.color || '#909399'))"
+                  :stroke-width="conn.highlighted ? 4 : (conn.hovered ? 3 : (conn.width || 2))"
+                  :marker-end="conn.highlighted ? 'url(#arrowhead-highlight)' : (conn.hovered ? 'url(#arrowhead-hover)' : 'url(#arrowhead)')"
+                  :class="{ 'connection-highlight': conn.highlighted }"
+                  @mouseenter="conn.hovered = true"
+                  @mouseleave="conn.hovered = false"
+                />
+                <circle 
+                  :cx="(conn.x1 + conn.x2) / 2"
+                  :cy="(conn.y1 + conn.y2) / 2"
+                  r="8"
+                  :fill="conn.highlighted ? '#409EFF' : (conn.hovered ? '#F56C6C' : 'transparent')"
+                  :stroke="conn.highlighted ? '#409EFF' : (conn.hovered ? '#F56C6C' : '#C0C4CC')"
+                  stroke-width="1"
+                  class="connection-handle"
+                />
+              </g>
             </g>
 
             <g class="nodes">
@@ -173,9 +263,11 @@
                 :transform="`translate(${node.x}, ${node.y})`"
                 :class="{ 
                   'node-selected': selectedNode?.id === node.id,
-                  'node-dragging': draggingNode?.id === node.id
+                  'node-dragging': draggingNode?.id === node.id,
+                  'node-connecting': connectingFrom?.id === node.id || (connectingFrom && editMode === 'connect')
                 }"
                 @mousedown.stop="onNodeMouseDown($event, node)"
+                @click.stop="onNodeClick(node)"
               >
                 <rect 
                   :width="node.width"
@@ -183,8 +275,8 @@
                   :rx="8"
                   :ry="8"
                   :fill="getNodeFill(node.type)"
-                  :stroke="getNodeStroke(node.type)"
-                  :stroke-width="selectedNode?.id === node.id ? 3 : 2"
+                  :stroke="selectedNode?.id === node.id ? '#409EFF' : (connectingFrom?.id === node.id ? '#67C23A' : getNodeStroke(node.type))"
+                  :stroke-width="selectedNode?.id === node.id ? 3 : (connectingFrom?.id === node.id ? 3 : 2)"
                   filter="url(#shadow)"
                 />
                 
@@ -233,6 +325,22 @@
                 >
                   {{ detail }}
                 </text>
+
+                <g 
+                  v-if="selectedNode?.id === node.id" 
+                  class="node-resize-handles"
+                >
+                  <circle 
+                    :cx="node.width" 
+                    :cy="node.height" 
+                    r="6" 
+                    fill="#409EFF" 
+                    stroke="#fff"
+                    stroke-width="2"
+                    class="resize-handle"
+                    @mousedown.stop="onResizeStart($event, node)"
+                  />
+                </g>
               </g>
             </g>
           </svg>
@@ -240,47 +348,143 @@
       </div>
     </el-card>
 
+    <el-dialog 
+      v-model="addNodeDialogVisible" 
+      title="新增资源节点"
+      width="500px"
+    >
+      <el-form :model="newNodeForm" label-width="100px">
+        <el-form-item label="资源类型" required>
+          <el-select v-model="newNodeForm.type" placeholder="请选择资源类型" style="width: 100%;">
+            <el-option 
+              v-for="(config, type) in nodeTypeConfig" 
+              :key="type" 
+              :label="config.name" 
+              :value="type"
+            >
+              <span>{{ config.icon }} {{ config.name }}</span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="资源名称" required>
+          <el-input v-model="newNodeForm.title" placeholder="请输入资源名称" />
+        </el-form-item>
+        <el-form-item label="副标题">
+          <el-input v-model="newNodeForm.subtitle" placeholder="请输入副标题（可选）" />
+        </el-form-item>
+        <el-form-item label="ARN/ID">
+          <el-input v-model="newNodeForm.arn" placeholder="请输入 ARN 或 ID（可选）" />
+        </el-form-item>
+        <el-form-item label="描述详情">
+          <el-input 
+            v-model="newNodeForm.detailsText" 
+            type="textarea" 
+            :rows="3" 
+            placeholder="每行一个详情项（可选）"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addNodeDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="addNewNode">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog 
+      v-model="editConnectionDialogVisible" 
+      title="编辑连接线"
+      width="400px"
+    >
+      <el-form :model="editConnectionForm" label-width="100px" v-if="selectedConnection">
+        <el-form-item label="起点">
+          <el-tag>{{ getNodeById(selectedConnection.from)?.title || '未知' }}</el-tag>
+        </el-form-item>
+        <el-form-item label="终点">
+          <el-tag>{{ getNodeById(selectedConnection.to)?.title || '未知' }}</el-tag>
+        </el-form-item>
+        <el-form-item label="线条颜色">
+          <el-color-picker v-model="editConnectionForm.color" />
+        </el-form-item>
+        <el-form-item label="线条宽度">
+          <el-slider v-model="editConnectionForm.width" :min="1" :max="6" :step="1" show-input />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editConnectionDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveConnectionEdit">保存</el-button>
+      </template>
+    </el-dialog>
+
     <el-drawer 
       v-model="detailDrawerVisible" 
-      :title="'资源详情 - ' + selectedNode?.title"
+      :title="selectedNode ? '编辑资源 - ' + selectedNode.title : '资源详情'"
       direction="right"
-      size="400px"
+      size="450px"
     >
       <div class="resource-detail" v-if="selectedNode">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="资源类型">
             <el-tag :type="getNodeTagType(selectedNode.type)">
-              {{ getNodeTypeName(selectedNode.type) }}
+              {{ getNodeIcon(selectedNode.type) }} {{ getNodeTypeName(selectedNode.type) }}
             </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="资源名称">
-            {{ selectedNode.title }}
-          </el-descriptions-item>
-          <el-descriptions-item label="ARN / ID">
-            <el-input 
-              :model-value="selectedNode.arn || selectedNode.id" 
-              readonly
-              type="textarea"
-              :rows="2"
-            />
-          </el-descriptions-item>
-          <el-descriptions-item label="位置">
-            X: {{ Math.round(selectedNode.x) }}, Y: {{ Math.round(selectedNode.y) }}
           </el-descriptions-item>
         </el-descriptions>
 
-        <el-divider>元数据</el-divider>
-        <div class="metadata-section">
-          <pre class="metadata-json">{{ JSON.stringify(selectedNode.rawData || {}, null, 2) }}</pre>
-        </div>
+        <el-divider>基本信息</el-divider>
+        <el-form :model="selectedNode" label-width="100px">
+          <el-form-item label="资源名称">
+            <el-input v-model="selectedNode.title" placeholder="请输入资源名称" />
+          </el-form-item>
+          <el-form-item label="副标题">
+            <el-input v-model="selectedNode.subtitle" placeholder="请输入副标题" />
+          </el-form-item>
+          <el-form-item label="ARN / ID">
+            <el-input 
+              v-model="selectedNode.arn" 
+              placeholder="请输入 ARN 或 ID"
+              type="textarea"
+              :rows="2"
+            />
+          </el-form-item>
+          <el-form-item label="详情列表">
+            <div class="details-editor">
+              <div 
+                v-for="(detail, idx) in selectedNode.details" 
+                :key="idx"
+                class="detail-item"
+              >
+                <el-input 
+                  v-model="selectedNode.details[idx]" 
+                  size="small"
+                  style="flex: 1;"
+                />
+                <el-button 
+                  type="danger" 
+                  size="small" 
+                  :icon="Delete"
+                  @click="removeDetail(idx)"
+                />
+              </div>
+              <el-button 
+                type="primary" 
+                size="small" 
+                :icon="Plus"
+                @click="addDetail"
+                plain
+              >
+                添加详情
+              </el-button>
+            </div>
+          </el-form-item>
+        </el-form>
 
-        <el-divider>编辑位置</el-divider>
-        <el-form label-width="80px">
+        <el-divider>位置和尺寸</el-divider>
+        <el-form label-width="100px">
           <el-form-item label="X 坐标">
             <el-input-number 
               v-model="selectedNode.x" 
               :min="0" 
-              :max="2000"
+              :max="5000"
               @change="onNodePositionChange"
             />
           </el-form-item>
@@ -288,22 +492,51 @@
             <el-input-number 
               v-model="selectedNode.y" 
               :min="0" 
-              :max="2000"
+              :max="5000"
               @change="onNodePositionChange"
             />
           </el-form-item>
+          <el-form-item label="宽度">
+            <el-input-number 
+              v-model="selectedNode.width" 
+              :min="100" 
+              :max="500"
+              :step="50"
+            />
+          </el-form-item>
+          <el-form-item label="高度">
+            <el-input-number 
+              v-model="selectedNode.height" 
+              :min="60" 
+              :max="300"
+              :step="20"
+            />
+          </el-form-item>
         </el-form>
+
+        <el-divider>元数据</el-divider>
+        <div class="metadata-section">
+          <pre class="metadata-json">{{ JSON.stringify(selectedNode.rawData || {}, null, 2) }}</pre>
+        </div>
+
+        <el-divider>操作</el-divider>
+        <div class="detail-actions">
+          <el-button type="danger" @click="handleDeleteNode(selectedNode)">
+            <el-icon><Delete /></el-icon>
+            删除此资源
+          </el-button>
+        </div>
       </div>
     </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, computed, onMounted, reactive } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Share, Download, Picture, Refresh, Search, Link, Document,
-  ZoomIn, ZoomOut, FullScreen
+  ZoomIn, ZoomOut, FullScreen, Plus, Delete, Mouse, Connection
 } from '@element-plus/icons-vue'
 import { useAwsEnvironmentsStore } from '@/stores/aws-environments'
 
@@ -318,10 +551,31 @@ const errorMessage = ref('')
 const resourceNodes = ref([])
 const connections = ref([])
 const selectedNode = ref(null)
+const selectedConnection = ref(null)
 const draggingNode = ref(null)
 const dragOffset = ref({ x: 0, y: 0 })
 const isDragging = ref(false)
+const isResizing = ref(false)
 const detailDrawerVisible = ref(false)
+
+const editMode = ref('select')
+const connectingFrom = ref(null)
+
+const addNodeDialogVisible = ref(false)
+const editConnectionDialogVisible = ref(false)
+
+const newNodeForm = reactive({
+  type: 'ecs_service',
+  title: '',
+  subtitle: '',
+  arn: '',
+  detailsText: ''
+})
+
+const editConnectionForm = reactive({
+  color: '#909399',
+  width: 2
+})
 
 const canvasWidth = ref(1200)
 const canvasHeight = ref(800)
@@ -461,6 +715,10 @@ const getNodeTagType = (type) => nodeTypeConfig[type]?.tagType || 'info'
 const getNodeTypeName = (type) => nodeTypeConfig[type]?.name || '未知资源'
 const getNodeIcon = (type) => nodeTypeConfig[type]?.icon || '📦'
 
+const getNodeById = (id) => {
+  return resourceNodes.value.find(n => n.id === id) || null
+}
+
 const loadEnvironments = async () => {
   isLoadingEnv.value = true
   try {
@@ -537,6 +795,9 @@ const collectResources = async () => {
   }
 }
 
+let nextNodeId = 1
+let nextConnId = 1
+
 const processResources = (resources) => {
   const nodes = []
   const conns = []
@@ -573,7 +834,8 @@ const processResources = (resources) => {
       y2: toNode.y,
       color,
       width: 2,
-      highlighted: false
+      highlighted: false,
+      hovered: false
     }
     conns.push(conn)
     return conn
@@ -680,6 +942,9 @@ const processResources = (resources) => {
   layoutNodes(nodes)
   createConnections(nodes, conns)
 
+  nextNodeId = nodeId + 1
+  nextConnId = connId + 1
+
   resourceNodes.value = nodes
   connections.value = conns
   adjustCanvasSize()
@@ -745,6 +1010,23 @@ const createConnections = (nodes, conns) => {
   const redis = getNodesByType('redis')
   const s3 = getNodesByType('s3')
 
+  const addConnectionWithCoords = (from, to, color) => {
+    if (!from || !to) return
+    conns.push({
+      id: `conn-${conns.length + 1}`,
+      from: from.id,
+      to: to.id,
+      x1: from.x + from.width / 2,
+      y1: from.y + from.height,
+      x2: to.x + to.width / 2,
+      y2: to.y,
+      color,
+      width: 2,
+      highlighted: false,
+      hovered: false
+    })
+  }
+
   if (ecsCluster && ecsService) {
     addConnectionWithCoords(ecsCluster, ecsService, '#3B82F6')
   }
@@ -786,22 +1068,6 @@ const createConnections = (nodes, conns) => {
     })
     s3.forEach(bucket => {
       addConnectionWithCoords(mainTask, bucket, '#0284C7')
-    })
-  }
-
-  function addConnectionWithCoords(from, to, color) {
-    if (!from || !to) return
-    conns.push({
-      id: `conn-${conns.length + 1}`,
-      from: from.id,
-      to: to.id,
-      x1: from.x + from.width / 2,
-      y1: from.y + from.height,
-      x2: to.x + to.width / 2,
-      y2: to.y,
-      color,
-      width: 2,
-      highlighted: false
     })
   }
 }
@@ -875,19 +1141,90 @@ const adjustCanvasSize = () => {
 }
 
 const onNodeMouseDown = (event, node) => {
-  selectedNode.value = node
-  draggingNode.value = node
-  isDragging.value = true
-  dragOffset.value = {
-    x: event.offsetX - node.x,
-    y: event.offsetY - node.y
+  if (editMode.value === 'select') {
+    selectedNode.value = node
+    draggingNode.value = node
+    isDragging.value = true
+    dragOffset.value = {
+      x: event.offsetX - node.x,
+      y: event.offsetY - node.y
+    }
+    selectedConnection.value = null
+    connections.value.forEach(c => c.highlighted = false)
+    detailDrawerVisible.value = true
+  }
+}
+
+const onNodeClick = (node) => {
+  if (editMode.value === 'connect') {
+    if (!connectingFrom.value) {
+      connectingFrom.value = node
+      ElMessage.info(`已选择起点: ${node.title}，请点击终点节点`)
+    } else if (connectingFrom.value.id !== node.id) {
+      const exists = connections.value.some(
+        c => (c.from === connectingFrom.value.id && c.to === node.id) ||
+             (c.from === node.id && c.to === connectingFrom.value.id)
+      )
+      
+      if (exists) {
+        ElMessage.warning('这两个节点之间已经存在连接')
+      } else {
+        const newConn = {
+          id: `conn-${nextConnId++}`,
+          from: connectingFrom.value.id,
+          to: node.id,
+          x1: connectingFrom.value.x + connectingFrom.value.width / 2,
+          y1: connectingFrom.value.y + connectingFrom.value.height,
+          x2: node.x + node.width / 2,
+          y2: node.y,
+          color: '#909399',
+          width: 2,
+          highlighted: false,
+          hovered: false
+        }
+        connections.value.push(newConn)
+        ElMessage.success('连接创建成功')
+      }
+      connectingFrom.value = null
+    } else {
+      connectingFrom.value = null
+    }
+  }
+}
+
+const onConnectionClick = (conn) => {
+  if (editMode.value === 'select') {
+    selectedConnection.value = conn
+    selectedNode.value = null
+    connections.value.forEach(c => c.highlighted = c.id === conn.id)
+    detailDrawerVisible.value = false
+    
+    editConnectionForm.color = conn.color || '#909399'
+    editConnectionForm.width = conn.width || 2
+    editConnectionDialogVisible.value = true
+  }
+}
+
+const saveConnectionEdit = () => {
+  if (selectedConnection.value) {
+    selectedConnection.value.color = editConnectionForm.color
+    selectedConnection.value.width = editConnectionForm.width
+    editConnectionDialogVisible.value = false
+    ElMessage.success('连接线已更新')
   }
 }
 
 const onCanvasMouseDown = (event) => {
-  if (event.target === svgRef.value || event.target.classList.contains('diagram-svg')) {
-    selectedNode.value = null
-    detailDrawerVisible.value = false
+  if (editMode.value === 'select') {
+    if (event.target === svgRef.value || 
+        event.target.classList.contains('diagram-svg') ||
+        event.target.tagName.toLowerCase() === 'rect') {
+      selectedNode.value = null
+      selectedConnection.value = null
+      detailDrawerVisible.value = false
+      connections.value.forEach(c => c.highlighted = false)
+    }
+    connectingFrom.value = null
   }
 }
 
@@ -910,6 +1247,11 @@ const onCanvasMouseUp = () => {
   }
   draggingNode.value = null
   isDragging.value = false
+}
+
+const onResizeStart = (event, node) => {
+  event.stopPropagation()
+  isResizing.value = true
 }
 
 const updateConnectionCoords = (node) => {
@@ -948,9 +1290,140 @@ const resetDiagram = () => {
   resourceNodes.value = []
   connections.value = []
   selectedNode.value = null
+  selectedConnection.value = null
+  connectingFrom.value = null
   detailDrawerVisible.value = false
+  editConnectionDialogVisible.value = false
   errorMessage.value = ''
   scale.value = 1
+  editMode.value = 'select'
+}
+
+const openAddNodeDialog = () => {
+  newNodeForm.type = 'ecs_service'
+  newNodeForm.title = ''
+  newNodeForm.subtitle = ''
+  newNodeForm.arn = ''
+  newNodeForm.detailsText = ''
+  addNodeDialogVisible.value = true
+}
+
+const addNewNode = () => {
+  if (!newNodeForm.type || !newNodeForm.title) {
+    ElMessage.warning('请填写资源类型和名称')
+    return
+  }
+
+  let maxX = 0
+  let maxY = 0
+  resourceNodes.value.forEach(node => {
+    maxX = Math.max(maxX, node.x)
+    maxY = Math.max(maxY, node.y)
+  })
+
+  const details = newNodeForm.detailsText 
+    ? newNodeForm.detailsText.split('\n').filter(d => d.trim())
+    : []
+
+  const newNode = {
+    id: `node-${nextNodeId++}`,
+    type: newNodeForm.type,
+    title: newNodeForm.title,
+    subtitle: newNodeForm.subtitle || '',
+    details,
+    arn: newNodeForm.arn || '',
+    rawData: {},
+    x: maxX + 50,
+    y: maxY + 50,
+    width: 200,
+    height: 100
+  }
+
+  resourceNodes.value.push(newNode)
+  addNodeDialogVisible.value = false
+  adjustCanvasSize()
+  ElMessage.success('资源节点添加成功')
+}
+
+const handleDeleteSelected = async () => {
+  if (selectedNode.value) {
+    await handleDeleteNode(selectedNode.value)
+  } else if (selectedConnection.value) {
+    await handleDeleteConnection(selectedConnection.value)
+  }
+}
+
+const handleDeleteNode = async (node) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除资源 "${node.title}" 吗？所有相关的连接线也会被删除。`,
+      '确认删除',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    connections.value = connections.value.filter(
+      c => c.from !== node.id && c.to !== node.id
+    )
+
+    resourceNodes.value = resourceNodes.value.filter(n => n.id !== node.id)
+    
+    if (selectedNode.value?.id === node.id) {
+      selectedNode.value = null
+      detailDrawerVisible.value = false
+    }
+
+    adjustCanvasSize()
+    ElMessage.success('资源已删除')
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除失败:', error)
+    }
+  }
+}
+
+const handleDeleteConnection = async (conn) => {
+  try {
+    const fromNode = getNodeById(conn.from)
+    const toNode = getNodeById(conn.to)
+    
+    await ElMessageBox.confirm(
+      `确定要删除从 "${fromNode?.title || '未知'}" 到 "${toNode?.title || '未知'}" 的连接线吗？`,
+      '确认删除',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    connections.value = connections.value.filter(c => c.id !== conn.id)
+    selectedConnection.value = null
+    editConnectionDialogVisible.value = false
+    ElMessage.success('连接线已删除')
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除失败:', error)
+    }
+  }
+}
+
+const addDetail = () => {
+  if (selectedNode.value) {
+    if (!selectedNode.value.details) {
+      selectedNode.value.details = []
+    }
+    selectedNode.value.details.push('')
+  }
+}
+
+const removeDetail = (idx) => {
+  if (selectedNode.value && selectedNode.value.details) {
+    selectedNode.value.details.splice(idx, 1)
+  }
 }
 
 const downloadAsSVG = () => {
@@ -1020,6 +1493,7 @@ onMounted(() => {
 
 .page-header-card,
 .input-card,
+.editor-toolbar-card,
 .diagram-card {
   margin-bottom: 24px;
   border-radius: 8px;
@@ -1093,10 +1567,37 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-label {
+  font-size: 14px;
+  color: #606266;
+  font-weight: 500;
+}
+
 .diagram-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.diagram-hints {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .diagram-controls {
@@ -1173,9 +1674,22 @@ g:hover rect {
   opacity: 0.8;
 }
 
+.node-connecting rect {
+  stroke: #67C23A !important;
+  stroke-width: 3 !important;
+}
+
+.connection-group {
+  cursor: pointer;
+}
+
+.connection-handle {
+  cursor: pointer;
+}
+
 .connection-highlight {
   stroke: #409EFF !important;
-  stroke-width: 3 !important;
+  stroke-width: 4 !important;
 }
 
 .resource-detail {
@@ -1198,8 +1712,33 @@ g:hover rect {
   word-break: break-all;
 }
 
+.details-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.detail-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .env-name {
   margin-right: 8px;
+}
+
+.node-resize-handles {
+  pointer-events: all;
+}
+
+.resize-handle {
+  cursor: se-resize;
 }
 
 @media (max-width: 768px) {
@@ -1230,6 +1769,11 @@ g:hover rect {
   
   .diagram-container {
     height: 400px;
+  }
+  
+  .editor-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>
