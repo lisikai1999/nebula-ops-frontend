@@ -10,6 +10,7 @@ import EnvironmentManagement from './components/AWS/EnvironmentManagement.vue'
 import DevOpsAgentIncident from './components/AWS/DevOpsAgentIncident.vue'
 import DevOpsAgentIncidentLaunch from './components/AWS/DevOpsAgentIncidentLaunch.vue'
 import DevOpsAgentIncidentList from './components/AWS/DevOpsAgentIncidentList.vue'
+import ArchitectureVisualizer from './components/AWS/ArchitectureVisualizer.vue'
 import KnowledgeBase from './components/AI/knowledge_base.vue'
 import LLMWeb from './components/AI/LLMWeb.vue'
 import WorkflowView from './components/Workflow/WorkflowView.vue'
@@ -28,6 +29,7 @@ const routes = {
   '/aws/devops-incident': DevOpsAgentIncident,
   '/aws/devops-incident-launch': DevOpsAgentIncidentLaunch,
   '/aws/devops-incident-list': DevOpsAgentIncidentList,
+  '/aws/architecture': ArchitectureVisualizer,
   '/ai/KnowledgeBase': KnowledgeBase,
   '/ai/LLMWeb': LLMWeb,
   '/workflow': WorkflowView,
@@ -169,6 +171,10 @@ export default {
             <el-icon><DataLine /></el-icon>
             <template #title>Athena SQL 查询</template>
           </el-menu-item>
+          <el-menu-item index="/aws/architecture">
+            <el-icon><Share /></el-icon>
+            <template #title>架构图可视化</template>
+          </el-menu-item>
         </el-sub-menu>
         
         <el-sub-menu index="ai">
@@ -270,6 +276,7 @@ const getBreadcrumbName = (path) => {
     '/aws/ecsInfo': 'ECS 信息查看',
     '/aws/Route': '域名路由',
     '/aws/athenaQuery': 'Athena SQL 查询',
+    '/aws/architecture': '架构图可视化',
     '/ai/KnowledgeBase': '知识库管理',
     '/ai/LLMWeb': 'RAG强化问答系统',
     '/workflow': '工作流编排'
