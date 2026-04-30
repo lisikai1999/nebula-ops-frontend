@@ -267,7 +267,6 @@
                   'node-connecting': connectingFrom?.id === node.id || (connectingFrom && editMode === 'connect')
                 }"
                 @mousedown.stop="onNodeMouseDown($event, node)"
-                @click.stop="onNodeClick(node)"
               >
                 <rect 
                   :width="node.width"
@@ -557,6 +556,8 @@ const dragOffset = ref({ x: 0, y: 0 })
 const isDragging = ref(false)
 const isResizing = ref(false)
 const detailDrawerVisible = ref(false)
+const hasMovedDuringDrag = ref(false)
+const mouseDownPos = ref({ x: 0, y: 0 })
 
 const editMode = ref('select')
 const connectingFrom = ref(null)
@@ -1145,18 +1146,29 @@ const onNodeMouseDown = (event, node) => {
     selectedNode.value = node
     draggingNode.value = node
     isDragging.value = true
+    hasMovedDuringDrag.value = false
+    mouseDownPos.value = { x: event.clientX, y: event.clientY }
     dragOffset.value = {
       x: event.offsetX - node.x,
       y: event.offsetY - node.y
     }
     selectedConnection.value = null
     connections.value.forEach(c => c.highlighted = false)
-    detailDrawerVisible.value = true
+  } else if (editMode.value === 'connect') {
+    draggingNode.value = node
+    isDragging.value = true
+    hasMovedDuringDrag.value = false
+    mouseDownPos.value = { x: event.clientX, y: event.clientY }
   }
 }
 
-const onNodeClick = (node) => {
-  if (editMode.value === 'connect') {
+const handleNodeClick = (node) => {
+  if (editMode.value === 'select') {
+    if (!hasMovedDuringDrag.value) {
+      selectedNode.value = node
+      detailDrawerVisible.value = true
+    }
+  } else if (editMode.value === 'connect') {
     if (!connectingFrom.value) {
       connectingFrom.value = node
       ElMessage.info(`已选择起点: ${node.title}，请点击终点节点`)
@@ -1231,18 +1243,31 @@ const onCanvasMouseDown = (event) => {
 const onCanvasMouseMove = (event) => {
   if (!isDragging.value || !draggingNode.value) return
 
-  const rect = event.currentTarget.getBoundingClientRect()
-  const x = (event.clientX - rect.left) / scale.value - dragOffset.value.x
-  const y = (event.clientY - rect.top) / scale.value - dragOffset.value.y
+  const moveThreshold = 5
+  const dx = Math.abs(event.clientX - mouseDownPos.value.x)
+  const dy = Math.abs(event.clientY - mouseDownPos.value.y)
+  
+  if (dx > moveThreshold || dy > moveThreshold) {
+    hasMovedDuringDrag.value = true
+  }
 
-  draggingNode.value.x = Math.max(0, x)
-  draggingNode.value.y = Math.max(0, y)
+  if (hasMovedDuringDrag.value) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = (event.clientX - rect.left) / scale.value - dragOffset.value.x
+    const y = (event.clientY - rect.top) / scale.value - dragOffset.value.y
 
-  updateConnectionCoords(draggingNode.value)
+    draggingNode.value.x = Math.max(0, x)
+    draggingNode.value.y = Math.max(0, y)
+
+    updateConnectionCoords(draggingNode.value)
+  }
 }
 
 const onCanvasMouseUp = () => {
   if (isDragging.value && draggingNode.value) {
+    if (!hasMovedDuringDrag.value) {
+      handleNodeClick(draggingNode.value)
+    }
     adjustCanvasSize()
   }
   draggingNode.value = null
