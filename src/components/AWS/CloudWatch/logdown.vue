@@ -1,11 +1,13 @@
 <script>
+import { useAwsEnvironmentsStore } from '@/stores/aws-environments'
+
 export default {
   name: 'LogDownLoad',
   data() {
     return {
-      env: ["china dev", "china dev-staging", "china prod", "singapore-dev", "singapore-staging", "singapore-prod", "usa-prod", "Spain-prod"],
       loading: false,
       groupLoading: false,
+      envLoading: false,
       group: [],
       form: {
         stime: '',
@@ -16,7 +18,32 @@ export default {
       }
     };
   },
+  computed: {
+    awsEnvironmentsStore() {
+      return useAwsEnvironmentsStore();
+    },
+    env() {
+      return this.awsEnvironmentsStore.environments.map(envItem => envItem.name);
+    }
+  },
   methods: {
+    async loadEnvironments() {
+      this.envLoading = true;
+      try {
+        await this.awsEnvironmentsStore.fetchEnvironments();
+        
+        if (this.awsEnvironmentsStore.selectedEnvironmentId) {
+          const selectedEnv = this.awsEnvironmentsStore.selectedEnvironment;
+          if (selectedEnv) {
+            this.form.env = selectedEnv.name;
+          }
+        }
+      } catch (error) {
+        console.error('加载环境列表失败:', error);
+      } finally {
+        this.envLoading = false;
+      }
+    },
     timeconversion(date) {
       const year = date.getFullYear();
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -98,6 +125,7 @@ export default {
     yesterday.setDate(yesterday.getDate() - 1);
     this.form.stime = yesterday;
     this.form.etime = now;
+    this.loadEnvironments();
   }
 };
 </script>
@@ -151,7 +179,6 @@ export default {
                 placeholder="选择开始时间"
                 style="width: 100%;"
                 format="YYYY-MM-DD HH:mm:ss"
-                value-format="YYYY-MM-DD HH:mm:ss"
               />
             </el-form-item>
           </el-col>
@@ -163,7 +190,6 @@ export default {
                 placeholder="选择结束时间"
                 style="width: 100%;"
                 format="YYYY-MM-DD HH:mm:ss"
-                value-format="YYYY-MM-DD HH:mm:ss"
               />
             </el-form-item>
           </el-col>
