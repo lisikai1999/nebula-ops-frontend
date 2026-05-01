@@ -238,6 +238,9 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { Refresh, Search, Loading, Right, DataLine, Document, Share, Folder } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
+import { useAwsEnvironmentsStore } from '@/stores/aws-environments';
+
+const awsEnvironmentsStore = useAwsEnvironmentsStore();
 
 // DOM 引用
 const chart = ref(null);
@@ -252,6 +255,7 @@ const ZonesId = ref([]);
 // 加载状态
 const loadingChart = ref(false);
 const loadingZones = ref(false);
+const loadingEnvs = ref(false);
 
 // 搜索过滤
 const searchKeyword = ref('');
@@ -270,8 +274,28 @@ const graphData = ref({
 const filteredNodes = ref([]);
 const filteredLinks = ref([]);
 
-// 环境列表
-const envs = ref(["china dev", "china dev-staging", "china prod", "singapore-dev", "singapore-staging", "singapore-prod", "usa-prod"]);
+// 环境列表 - 从store获取
+const envs = computed(() => {
+  return awsEnvironmentsStore.environments.map(envItem => envItem.name);
+});
+
+const loadEnvironments = async () => {
+  loadingEnvs.value = true;
+  try {
+    await awsEnvironmentsStore.fetchEnvironments();
+    
+    if (awsEnvironmentsStore.selectedEnvironmentId) {
+      const selectedEnv = awsEnvironmentsStore.selectedEnvironment;
+      if (selectedEnv) {
+        env.value = selectedEnv.name;
+      }
+    }
+  } catch (error) {
+    console.error('加载环境列表失败:', error);
+  } finally {
+    loadingEnvs.value = false;
+  }
+};
 
 // 计算属性
 const hasData = computed(() => graphData.value.nodes.length > 0);
@@ -530,7 +554,7 @@ const updateChart = async () => {
     
   } catch (err) {
     console.error('Failed to update chart:', err);
-    ElMessage.error('获取数据失败: ' + (err.message || '未知错误'));
+    ElMessage.error('获取数据失败，请稍后重试');
   } finally {
     loadingChart.value = false;
   }
@@ -646,6 +670,8 @@ const handleCloseDrawer = (done) => {
 // 组件挂载
 onMounted(() => {
   console.log('Route component mounted');
+  // 加载环境列表
+  loadEnvironments();
   // 立即尝试初始化
   initChart();
   // 在下一个 tick 再次尝试（确保 DOM 完全渲染）
